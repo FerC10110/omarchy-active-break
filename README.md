@@ -75,13 +75,19 @@ Everything is available over IPC:
 omarchy-shell io.github.ferc10110.active-break status        # JSON with the phase, exercise and times
 omarchy-shell io.github.ferc10110.active-break startBreak
 omarchy-shell io.github.ferc10110.active-break togglePause
-# also: snooze, skip, finishBreak, pause, resume, reroll
+# also: snooze, skip, finishBreak, pause, resume, reroll, editRoutine
 ```
 
 For example, to pause with a keybinding in `~/.config/hypr/bindings.lua`:
 
 ```lua
 o.bind("SUPER + ALT + G", "Active Break: pause", "omarchy-shell io.github.ferc10110.active-break togglePause")
+```
+
+And one to open the routine editor:
+
+```lua
+o.bind("SUPER + ALT + SHIFT + G", "Active Break: edit routine", "omarchy-shell io.github.ferc10110.active-break editRoutine")
 ```
 
 ## Settings
@@ -97,10 +103,29 @@ They're saved to `~/.config/active-break/config.json`, which you can also edit b
 
 ## Routine
 
-`~/.config/active-break/routine.json` is created on first run with 28 exercises for
-dumbbells, kettlebells, an Olympic barbell with a rack, a bench and a pull-up
-bar. Edit it as you like: changes apply as soon as you save the file. The "Edit
-routine" button in Settings opens it in your editor.
+The routine is the catalog of exercises, each day's plan and the rotation
+order. It starts with 28 exercises for dumbbells, kettlebells, an Olympic
+barbell with a rack, a bench and a pull-up bar.
+
+To change it, click **Edit routine** in Settings (the cog in the panel), or run
+`omarchy-shell io.github.ferc10110.active-break editRoutine`. The editor opens in the
+middle of the screen with three tabs:
+
+- **Exercises**: add, edit or delete exercises: name, muscle group, equipment,
+  sets, reps and a technique cue. Deleting one also takes it out of the plan.
+- **Weekly plan**: each day's focus and the exercises it goes through, in
+  order.
+- **Rotation**: the order of the muscle groups in rotation mode, and which ones
+  take part.
+
+Nothing is written until you click **Save** (or press Ctrl+S). Cancel or Esc
+asks before throwing changes away. **Restore defaults** brings back the
+original routine, and it still needs a Save.
+
+### The file
+
+The editor writes `~/.config/active-break/routine.json`. You can also edit it by hand:
+changes apply as soon as you save the file.
 
 ```json
 {
@@ -126,8 +151,7 @@ What each field means:
   - A day without a plan uses the whole catalog.
   - Ids that don't exist are ignored.
 
-To start over, delete the file and restart the shell (`omarchy restart
-shell`). It's recreated from `defaults/routine.json`.
+To start over, use **Restore defaults** in the editor.
 
 ## Files
 
@@ -150,8 +174,7 @@ The plugin has two parts:
 
 - **`Service.qml`** is a single instance that owns the clock, the reminders,
   the files and IPC.
-- **`BarWidget.qml`** and the panel only display it and call
-  `service.act(...)`.
+- **`BarWidget.qml`**, the panel and the routine editor only display it and call into it.
 
 The logic (state machine, work hours, exercise picking and texts) is plain
 JavaScript in `BreakModel.js`:

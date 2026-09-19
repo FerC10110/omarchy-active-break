@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.ferc10110.active-break",
   "name": "Active Break",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Fernando Cancro",
   "license": "MIT",
   "description": "Exercise breaks while you work: after a stretch of work it tells you to stop and which exercise to do (dumbbells, kettlebells, barbell), counts the break down and reminds you until you do it or skip it.",
