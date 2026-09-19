@@ -498,6 +498,83 @@ function finalizeIds(routine) {
   return r
 }
 
+function byName(a, b) { return a.name.localeCompare(b.name) }
+
+function dayEntry(r, day) {
+  if (!r.plan[day]) r.plan[day] = { focus: "", exercises: [] }
+  return r.plan[day]
+}
+
+// Moves list[from] to position `to` in place; out-of-range moves do nothing.
+function moveItem(list, from, to) {
+  if (from < 0 || to < 0 || from >= list.length || to >= list.length) return
+  list.splice(to, 0, list.splice(from, 1)[0])
+}
+
+function setFocus(routine, day, text) {
+  var r = cloneRoutine(routine)
+  dayEntry(r, day).focus = String(text || "")
+  return pruneDays(r)
+}
+
+function addToDay(routine, day, id) {
+  var r = cloneRoutine(routine)
+  if (!findExercise(r, id)) return r
+  var entry = dayEntry(r, day)
+  if (entry.exercises.indexOf(id) === -1) entry.exercises.push(id)
+  return r
+}
+
+function removeFromDay(routine, day, index) {
+  var r = cloneRoutine(routine)
+  if (r.plan[day]) r.plan[day].exercises.splice(index, 1)
+  return pruneDays(r)
+}
+
+function moveInDay(routine, day, from, to) {
+  var r = cloneRoutine(routine)
+  if (r.plan[day]) moveItem(r.plan[day].exercises, from, to)
+  return r
+}
+
+// The "Add exercise…" choices for a day: named exercises not in it yet.
+function dayOptions(routine, day) {
+  var taken = routine.plan[day] ? routine.plan[day].exercises : []
+  return routine.exercises.filter(function(e) { return e.name.trim() !== "" && taken.indexOf(e.id) === -1 })
+    .sort(byName)
+    .map(function(e) { return { value: e.id, label: e.name, description: GROUP_NAMES[e.group] || e.group } })
+}
+
+function moveGroup(routine, from, to) {
+  var r = cloneRoutine(routine)
+  moveItem(r.rotation, from, to)
+  return r
+}
+
+// Excluding takes a group out of the rotation; including puts it last.
+function toggleGroup(routine, group) {
+  var r = cloneRoutine(routine)
+  var i = r.rotation.indexOf(group)
+  if (i === -1) r.rotation.push(group)
+  else r.rotation.splice(i, 1)
+  return r
+}
+
+function countText(n) { return n === 1 ? "1 exercise" : n + " exercises" }
+
+// Included groups first, in rotation order (so a row's index is its index in
+// `rotation`), then the known groups left out.
+function rotationRows(routine) {
+  var groups = routine.rotation.slice()
+  GROUP_ORDER.forEach(function(g) { if (groups.indexOf(g) === -1) groups.push(g) })
+  return groups.map(function(g) {
+    var included = routine.rotation.indexOf(g) !== -1
+    var count = routine.exercises.filter(function(e) { return e.group === g }).length
+    return { group: g, name: GROUP_NAMES[g] || g, included: included, count: count,
+             detail: included && count === 0 ? "No exercises: skipped" : countText(count) }
+  })
+}
+
 if (typeof module !== "undefined") {
   module.exports = { MIN: MIN, DAY_KEYS: DAY_KEYS, MODE_NAMES: MODE_NAMES, clock: clock, dateKey: dateKey,
                      parseClock: parseClock, normalizeConfig: normalizeConfig, inWorkHours: inWorkHours,
@@ -510,5 +587,8 @@ if (typeof module !== "undefined") {
                      GROUP_ORDER: GROUP_ORDER, EQUIPMENT_ORDER: EQUIPMENT_ORDER, cloneRoutine: cloneRoutine,
                      slug: slug, exerciseId: exerciseId, newExercise: newExercise, updateExercise: updateExercise,
                      toggleEquipment: toggleEquipment, removeExercise: removeExercise,
-                     exerciseUsage: exerciseUsage, deleteText: deleteText, finalizeIds: finalizeIds }
+                     exerciseUsage: exerciseUsage, deleteText: deleteText, finalizeIds: finalizeIds,
+                     setFocus: setFocus, addToDay: addToDay, removeFromDay: removeFromDay, moveInDay: moveInDay,
+                     dayOptions: dayOptions, moveGroup: moveGroup, toggleGroup: toggleGroup,
+                     rotationRows: rotationRows }
 }

@@ -502,3 +502,60 @@ test("finalizeIds names new exercises after their final name and fixes the plan"
   assert.equal(M.findExercise(done, "goblet").name, "Goblet squat")
   assert.deepEqual(r.plan.mon.exercises, ["press", "pushups", "new:1"])
 })
+
+test("setFocus names a day, and a day with no focus and no exercises disappears", () => {
+  let r = M.setFocus(routine, "wed", "Pull")
+  assert.deepEqual(r.plan.wed, { focus: "Pull", exercises: [] })
+  r = M.setFocus(r, "wed", "")
+  assert.equal(r.plan.wed, undefined)
+  assert.equal(routine.plan.wed, undefined)
+})
+
+test("addToDay appends an exercise once and ignores unknown ids", () => {
+  let r = M.addToDay(routine, "mon", "row")
+  r = M.addToDay(r, "mon", "row")
+  r = M.addToDay(r, "mon", "nope")
+  assert.deepEqual(r.plan.mon.exercises, ["press", "pushups", "row"])
+  assert.deepEqual(M.addToDay(routine, "sat", "goblet").plan.sat, { focus: "", exercises: ["goblet"] })
+  assert.deepEqual(routine.plan.mon.exercises, ["press", "pushups"])
+})
+
+test("removeFromDay takes out one entry and drops a day left empty", () => {
+  assert.deepEqual(M.removeFromDay(routine, "mon", 0).plan.mon.exercises, ["pushups"])
+  assert.equal(M.removeFromDay(M.addToDay(routine, "sat", "goblet"), "sat", 0).plan.sat, undefined)
+  const bare = M.removeFromDay(M.removeFromDay(routine, "mon", 0), "mon", 0)
+  assert.deepEqual(bare.plan.mon, { focus: "Push", exercises: [] })
+})
+
+test("moveInDay reorders a day and ignores moves past the ends", () => {
+  assert.deepEqual(M.moveInDay(routine, "mon", 0, 1).plan.mon.exercises, ["pushups", "press"])
+  assert.deepEqual(M.moveInDay(routine, "mon", 1, 2).plan.mon.exercises, ["press", "pushups"])
+  assert.deepEqual(routine.plan.mon.exercises, ["press", "pushups"])
+})
+
+test("dayOptions offers the catalog minus the day's exercises, by name", () => {
+  assert.deepEqual(M.dayOptions(routine, "mon"), [
+    { value: "row", label: "Barbell row", description: "Pull" },
+    { value: "goblet", label: "Goblet squat", description: "Legs" },
+    { value: "lunge", label: "Reverse lunge", description: "Legs" }
+  ])
+  assert.equal(M.dayOptions(M.newExercise(routine, "legs").routine, "mon").length, 3)
+})
+
+test("moveGroup and toggleGroup edit the rotation", () => {
+  assert.deepEqual(M.moveGroup(routine, 2, 1).rotation, ["legs", "pull", "push", "core"])
+  assert.deepEqual(M.toggleGroup(routine, "push").rotation, ["legs", "pull", "core"])
+  assert.deepEqual(M.toggleGroup(routine, "hinge").rotation, ["legs", "push", "pull", "core", "hinge"])
+  assert.deepEqual(routine.rotation, ["legs", "push", "pull", "core"])
+})
+
+test("rotationRows lists included groups in order, then the rest", () => {
+  const rows = M.rotationRows(routine)
+  assert.deepEqual(rows.map(r => [r.group, r.included, r.count]),
+    [["legs", true, 2], ["push", true, 2], ["pull", true, 1], ["core", true, 0], ["hinge", false, 0]])
+  assert.equal(rows[0].name, "Legs")
+  assert.equal(rows[0].detail, "2 exercises")
+  assert.equal(rows[2].detail, "1 exercise")
+  assert.equal(rows[3].detail, "No exercises: skipped")
+  assert.equal(rows[4].detail, "0 exercises")
+})
