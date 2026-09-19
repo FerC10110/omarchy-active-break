@@ -1,12 +1,11 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import qs.Commons
 import qs.Ui
 import "BreakModel.js" as Model
 
 // Durations, how the exercise is chosen, work hours and sound. Saved to
-// ~/.config/active-break/config.json; the routine itself is edited as a file.
+// ~/.config/active-break/config.json; the routine has its own editor (RoutineEditor.qml).
 Item {
   id: view
   property var host: null
@@ -232,9 +231,7 @@ Item {
       }
       Text {
         width: column.width
-        text: "The exercises, each day's plan and the rotation order live in "
-              + (view.host && view.host.service ? view.host.service.configDir : "~/.config/active-break")
-              + "/routine.json. Changes apply as soon as you save the file."
+        text: "Exercises, the weekly plan and the rotation order."
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
         color: view.host ? view.host.dim : view.foreground
@@ -248,8 +245,9 @@ Item {
         fontFamily: view.fontFamily
         fontSize: Style.font.bodySmall
         onClicked: {
-          Quickshell.execDetached(["omarchy-launch-editor", view.host.service.configDir + "/routine.json"])
-          view.host.close()
+          var service = view.host.service
+          view.host.close()   // close first so the editor gets the keyboard
+          service.openEditor()
         }
       }
 

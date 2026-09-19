@@ -37,6 +37,7 @@ Item {
 
   property real savedTickAt: 0
   property int dueNotificationId: 0
+  property bool editorOpen: false
 
   // ---- what the widget and panel read
   readonly property var exercise: Model.findExercise(routine, session.exerciseId)
@@ -222,6 +223,22 @@ Item {
     return Model.normalizeRoutine(parseJson(bundledRoutine.text()).value)
   }
 
+  function openEditor() {
+    if (!ready) return false
+    editorOpen = true
+    return true
+  }
+
+  function closeEditor() { editorOpen = false }
+
+  // Created only while open: it needs the shell's UI kit, which the isolated
+  // test harness doesn't load.
+  Loader {
+    active: service.editorOpen
+    source: "RoutineEditor.qml"
+    onLoaded: item.service = service
+  }
+
   FileView {
     id: sessionFile
     path: service.stateDir + "/state.json"
@@ -287,6 +304,7 @@ Item {
                               exercise: ex ? ex.name : null, prescription: ex ? Model.prescription(ex) : null,
                               dueAt: service.session.dueAt, breakEndsAt: service.session.breakEndsAt,
                               mode: service.modeText, schedule: service.scheduleText,
+                              editorOpen: service.editorOpen,
                               problem: service.problem || null })
     }
     function startBreak(): string { return service.act("startBreak") ? "ok" : "not applicable" }
@@ -297,5 +315,6 @@ Item {
     function resume(): string { return service.act("resume") ? "ok" : "not applicable" }
     function togglePause(): string { return service.act("togglePause") ? "ok" : "not applicable" }
     function reroll(): string { return service.act("reroll") ? "ok" : "not applicable" }
+    function editRoutine(): string { return service.openEditor() ? "ok" : "not ready" }
   }
 }
