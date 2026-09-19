@@ -559,3 +559,41 @@ test("rotationRows lists included groups in order, then the rest", () => {
   assert.equal(rows[3].detail, "No exercises: skipped")
   assert.equal(rows[4].detail, "0 exercises")
 })
+
+test("catalogSections groups by muscle group, sorted by name", () => {
+  const sections = M.catalogSections(routine, "")
+  assert.deepEqual(sections.map(s => s.group), ["legs", "push", "pull"])
+  assert.equal(sections[0].name, "Legs")
+  assert.deepEqual(sections[1].exercises.map(e => e.id), ["press", "pushups"])
+})
+
+test("catalogSections filters by name and puts unknown groups last", () => {
+  const r = M.normalizeRoutine({ exercises: routine.exercises.concat([{ id: "carry", name: "Suitcase carry", group: "carries" }]) })
+  assert.deepEqual(M.catalogSections(r, "").map(s => s.group), ["legs", "push", "pull", "carries"])
+  assert.equal(M.catalogSections(r, "").slice(-1)[0].name, "carries")
+  assert.deepEqual(M.catalogSections(r, "  PRESS ").map(s => s.exercises.map(e => e.id)), [["press"]])
+})
+
+test("catalogIds and selectionAfterRemove follow the list order", () => {
+  assert.deepEqual(M.catalogIds(routine), ["goblet", "lunge", "press", "pushups", "row"])
+  assert.equal(M.selectionAfterRemove(routine, "lunge"), "press")
+  assert.equal(M.selectionAfterRemove(routine, "row"), "pushups")
+  const one = M.normalizeRoutine({ exercises: [{ id: "a", name: "A", group: "core" }] })
+  assert.equal(M.selectionAfterRemove(one, "a"), "")
+})
+
+test("routineProblem finds what blocks saving", () => {
+  assert.equal(M.routineProblem(routine), "")
+  assert.equal(M.routineProblem(M.newExercise(routine, "legs").routine), "An exercise needs a name")
+  assert.equal(M.routineProblem(M.updateExercise(routine, "row", { name: " goblet SQUAT " })),
+               "Two exercises are called goblet SQUAT")
+  assert.equal(M.routineProblem({ exercises: [], plan: {}, rotation: [] }), "Add at least one exercise")
+})
+
+test("sameRoutine ignores plan key order and sees real edits", () => {
+  const copy = JSON.parse(JSON.stringify(routine))
+  assert.equal(M.sameRoutine(routine, copy), true)
+  assert.equal(M.sameRoutine(routine, Object.assign({}, copy, { plan: { tue: copy.plan.tue, mon: copy.plan.mon } })), true)
+  assert.equal(M.sameRoutine(routine, M.updateExercise(routine, "row", { reps: "10" })), false)
+  assert.equal(M.sameRoutine(routine, M.moveGroup(routine, 0, 1)), false)
+})

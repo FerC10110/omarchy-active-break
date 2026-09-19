@@ -575,6 +575,61 @@ function rotationRows(routine) {
   })
 }
 
+// The editor's exercise list: known groups in GROUP_ORDER, unknown ones after
+// them in order of appearance, each sorted by name. `query` filters by name.
+function catalogSections(routine, query) {
+  var q = String(query || "").trim().toLowerCase()
+  var groups = GROUP_ORDER.slice()
+  routine.exercises.forEach(function(e) { if (groups.indexOf(e.group) === -1) groups.push(e.group) })
+  var sections = []
+  groups.forEach(function(g) {
+    var list = routine.exercises.filter(function(e) {
+      return e.group === g && (q === "" || e.name.toLowerCase().indexOf(q) !== -1)
+    }).sort(byName)
+    if (list.length > 0) sections.push({ group: g, name: GROUP_NAMES[g] || g, exercises: list })
+  })
+  return sections
+}
+
+function catalogIds(routine, query) {
+  var ids = []
+  catalogSections(routine, query).forEach(function(s) {
+    s.exercises.forEach(function(e) { ids.push(e.id) })
+  })
+  return ids
+}
+
+// What to select once `id` is deleted: the next one in the list, or the
+// previous one when it was last, or nothing.
+function selectionAfterRemove(routine, id) {
+  var ids = catalogIds(routine)
+  var i = ids.indexOf(id)
+  if (i === -1 || ids.length === 1) return ""
+  return i < ids.length - 1 ? ids[i + 1] : ids[i - 1]
+}
+
+function routineProblem(routine) {
+  if (routine.exercises.length === 0) return "Add at least one exercise"
+  var seen = {}
+  for (var i = 0; i < routine.exercises.length; i++) {
+    var name = String(routine.exercises[i].name).trim()
+    if (name === "") return "An exercise needs a name"
+    if (seen[name.toLowerCase()]) return "Two exercises are called " + name
+    seen[name.toLowerCase()] = true
+  }
+  return ""
+}
+
+function canonicalRoutine(r) {
+  return JSON.stringify({
+    exercises: r.exercises.map(function(e) { return [e.id, e.name, e.group, e.equipment, e.sets, e.reps, e.cue] }),
+    plan: DAY_KEYS.map(function(k) { return r.plan[k] ? [k, r.plan[k].focus, r.plan[k].exercises] : null }),
+    rotation: r.rotation
+  })
+}
+
+function sameRoutine(a, b) { return canonicalRoutine(a) === canonicalRoutine(b) }
+
 if (typeof module !== "undefined") {
   module.exports = { MIN: MIN, DAY_KEYS: DAY_KEYS, MODE_NAMES: MODE_NAMES, clock: clock, dateKey: dateKey,
                      parseClock: parseClock, normalizeConfig: normalizeConfig, inWorkHours: inWorkHours,
@@ -590,5 +645,7 @@ if (typeof module !== "undefined") {
                      exerciseUsage: exerciseUsage, deleteText: deleteText, finalizeIds: finalizeIds,
                      setFocus: setFocus, addToDay: addToDay, removeFromDay: removeFromDay, moveInDay: moveInDay,
                      dayOptions: dayOptions, moveGroup: moveGroup, toggleGroup: toggleGroup,
-                     rotationRows: rotationRows }
+                     rotationRows: rotationRows, catalogSections: catalogSections, catalogIds: catalogIds,
+                     selectionAfterRemove: selectionAfterRemove, routineProblem: routineProblem,
+                     sameRoutine: sameRoutine }
 }
