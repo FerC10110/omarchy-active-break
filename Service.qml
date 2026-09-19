@@ -205,6 +205,23 @@ Item {
     tick()
   }
 
+  // The routine editor hands its draft here. False (and nothing written) when
+  // it has no exercises left; the editor never sends one, but hand-made IPC
+  // or a bug shouldn't be able to empty the file.
+  function saveRoutine(newRoutine) {
+    var clean = Model.normalizeRoutine(newRoutine)
+    if (clean.exercises.length === 0) return false
+    routine = clean
+    routineError = ""
+    routineFile.setText(JSON.stringify(clean, null, 2) + "\n")
+    tick()   // re-picks the pending exercise if it was deleted
+    return true
+  }
+
+  function defaultRoutine() {
+    return Model.normalizeRoutine(parseJson(bundledRoutine.text()).value)
+  }
+
   FileView {
     id: sessionFile
     path: service.stateDir + "/state.json"
@@ -240,6 +257,7 @@ Item {
     id: routineFile
     path: service.configDir + "/routine.json"
     watchChanges: true
+    atomicWrites: true
     printErrors: false
     onFileChanged: reload()
     onLoaded: service.loadRoutine(text())
