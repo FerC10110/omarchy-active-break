@@ -503,6 +503,11 @@ test("finalizeIds names new exercises after their final name and fixes the plan"
   assert.deepEqual(r.plan.mon.exercises, ["press", "pushups", "new:1"])
 })
 
+test("finalizeIds trims every exercise's name", () => {
+  const r = M.updateExercise(routine, "goblet", { name: "  Goblet squat  " })
+  assert.equal(M.finalizeIds(r).exercises.find(e => e.id === "goblet").name, "Goblet squat")
+})
+
 test("setFocus names a day, and a day with no focus and no exercises disappears", () => {
   let r = M.setFocus(routine, "wed", "Pull")
   assert.deepEqual(r.plan.wed, { focus: "Pull", exercises: [] })
@@ -613,4 +618,22 @@ test("a break whose exercise was deleted shows another one and keeps its clock",
   assert.equal(state.phase, "break")
   assert.equal(state.breakEndsAt, MON_10 + 10 * MIN)
   assert.equal(state.exerciseId, "pushups")
+})
+
+test("a break that ends as its deleted exercise is noticed picks only once", () => {
+  const s = Object.assign(M.initialState(), { phase: "break", breakEndsAt: MON_10 + 10 * MIN, lastTickAt: MON_10 + 9 * MIN,
+                                              exerciseId: "row", planDay: "2026-09-21", planIndex: 1,
+                                              workMin: 30, breakMin: 10, mode: "weekly" })
+  const { state } = M.step(s, config, M.removeExercise(routine, "row"), MON_10 + 10 * MIN, first)
+  assert.equal(state.phase, "working")
+  assert.equal(state.exerciseId, "pushups")   // the next plan entry, not the one after it
+})
+
+test("a pause from yesterday with a deleted exercise starts today's plan at the top", () => {
+  const s = Object.assign(M.initialState(), { phase: "paused", pausedDay: "2026-09-21", remainingMs: 5 * MIN,
+                                              lastTickAt: at(21, 17), exerciseId: "row", planDay: "2026-09-21",
+                                              planIndex: 2, workMin: 30, breakMin: 10, mode: "weekly" })
+  const { state } = M.step(s, config, M.removeExercise(routine, "row"), at(22, 10), first)
+  assert.equal(state.phase, "working")
+  assert.equal(state.exerciseId, "goblet")    // Tuesday's first entry
 })

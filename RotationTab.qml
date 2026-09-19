@@ -23,10 +23,6 @@ Item {
   function move(from, to) { host.edit(function(r) { return Model.moveGroup(r, from, to) }) }
   function toggle(group) { host.edit(function(r) { return Model.toggleGroup(r, group) }) }
 
-  // Escape always closes the editor, even from a focused control without its
-  // own handler (the ↑ ↓ buttons and the switch have none).
-  Keys.onEscapePressed: function(event) { view.host.requestClose(); event.accepted = true }
-
   ColumnLayout {
     anchors.fill: parent
     spacing: Style.space(8)

@@ -46,8 +46,11 @@ Item {
   onHostChanged: load()
   onDayChanged: load()
 
-  // Escape always closes the editor, even from a focused control without
-  // its own handler (the day chips and the ↑ ↓ × buttons have none).
+  // Escape always closes the editor. The day chips and the ↑ ↓ × buttons
+  // never take focus (kit Button.focusable defaults to false), so this is
+  // for the two controls that do: the Focus field has its own handler below,
+  // and the "Add exercise…" trigger only swallows Escape while its popup is
+  // open, so this catches it when the trigger itself has focus.
   Keys.onEscapePressed: function(event) { view.host.requestClose(); event.accepted = true }
 
   Connections {

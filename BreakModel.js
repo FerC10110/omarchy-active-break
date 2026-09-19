@@ -227,12 +227,7 @@ function step(state, config, routine, now, rng) {
   s.lastTickAt = now
   followConfig(s, config, routine, now, rng)
 
-  // The pending exercise was deleted (in the editor or by hand): pick another.
-  if (s.phase !== "off" && s.exerciseId && !findExercise(routine, s.exerciseId))
-    choose(s, config, routine, now, rng, false)
-
-  if (s.phase === "paused") {
-    if (s.pausedDay === dateKey(new Date(now))) return { state: s, events: events }
+  if (s.phase === "paused" && s.pausedDay !== dateKey(new Date(now))) {
     s.phase = "off"
     s.remainingMs = null
     s.pausedDay = null
@@ -259,6 +254,12 @@ function step(state, config, routine, now, rng) {
     startCycle(s, config, routine, now, rng, false)
     if (!gap) events.push("breakEnd")
   }
+
+  // The pending exercise was deleted (in the editor or by hand): pick another.
+  // Last, so a transition above that already re-picked isn't followed by a
+  // second pick (which would skip a plan entry or a rotation group).
+  if (s.phase !== "off" && s.exerciseId && !findExercise(routine, s.exerciseId))
+    choose(s, config, routine, now, rng, false)
 
   return { state: s, events: events }
 }
@@ -406,7 +407,7 @@ function rank(order, value) {
 // "Goblet Squat!" → "goblet-squat". Accents are dropped where the engine can.
 function slug(name) {
   var s = String(name || "")
-  if (typeof s.normalize === "function") s = s.normalize("NFD").replace(/[̀-ͯ]/g, "")
+  if (typeof s.normalize === "function") s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   s = s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
   return s || "exercise"
 }
@@ -485,10 +486,12 @@ function deleteText(routine, id) {
          + (days.length === 1 ? " plan; it will be removed from it." : " plans; it will be removed from them.")
 }
 
-// Gives each "new:<n>" exercise its real id, from the name it ended up with,
+// Prepares the draft for saving: trims every exercise's name, then gives
+// each "new:<n>" exercise its real id, from the name it ended up with,
 // and follows the rename in the plan. Existing ids never change.
 function finalizeIds(routine) {
   var r = cloneRoutine(routine)
+  r.exercises.forEach(function(e) { e.name = e.name.trim() })
   var renames = {}
   r.exercises.forEach(function(e) {
     if (e.id.indexOf(NEW_ID) !== 0) return

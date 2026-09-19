@@ -53,6 +53,7 @@ Item {
   function edit(fn) { draft = fn(draft) }
 
   function select(id, focusName) {
+    keyCatcher.forceActiveFocus()   // commit a Sets value typed for the previous selection
     selectedId = id
     reloadForm(focusName === true)
   }
@@ -76,9 +77,11 @@ Item {
   }
 
   function save() {
+    if (confirm.opened) return
     keyCatcher.forceActiveFocus()   // a number typed in Sets commits on focus loss
     if (problem !== "") return
-    if (!dirty) {
+    if (!service) return
+    if (!dirty && service.routineError === "") {
       service.closeEditor()
       return
     }
@@ -239,6 +242,7 @@ Item {
                 fontFamily: editor.fontFamily
                 fontSize: Style.font.bodySmall
                 onChanged: function(value) {
+                  keyCatcher.forceActiveFocus()   // commit a Sets value typed for the previous selection
                   editor.tab = value
                   editor.focusTab()
                 }
@@ -270,10 +274,14 @@ Item {
 
               Text {
                 Layout.fillWidth: true
-                text: editor.problem !== "" ? editor.problem : (editor.dirty ? "Unsaved changes" : "")
+                text: editor.problem !== "" ? editor.problem
+                      : (editor.service !== null && editor.service.routineError !== ""
+                         ? "routine.json has an error; Save replaces it with this routine"
+                         : (editor.dirty ? "Unsaved changes" : ""))
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
-                color: editor.problem !== "" ? editor.urgent : editor.dim
+                color: editor.problem !== "" || (editor.service !== null && editor.service.routineError !== "")
+                       ? editor.urgent : editor.dim
                 font.family: editor.fontFamily
                 font.pixelSize: Style.font.bodySmall
               }
