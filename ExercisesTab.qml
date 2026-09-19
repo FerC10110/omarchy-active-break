@@ -22,6 +22,11 @@ Item {
   readonly property color dim: host ? host.dim : Qt.darker(Color.foreground, 1.55)
   readonly property string fontFamily: host ? host.fontFamily : Style.font.family
 
+  // Fields with their own Keys.onEscapePressed handle Escape themselves;
+  // this catches it from anything else that gets focus (the Sets spinner
+  // has no Escape handler of its own) so Escape always closes the editor.
+  Keys.onEscapePressed: function(event) { view.host.requestClose(); event.accepted = true }
+
   // The text fields are filled here instead of bound, so the draft changing
   // under them never moves the cursor. Reads host.draft directly: inside
   // onHostChanged the `exercise` binding can still hold its null fallback.

@@ -68,6 +68,7 @@ Item {
   }
 
   function requestClose() {
+    keyCatcher.forceActiveFocus()   // a number typed in Sets commits on focus loss
     if (confirm.opened) closeConfirm()
     else if (dirty) ask("discard")
     else service.closeEditor()
