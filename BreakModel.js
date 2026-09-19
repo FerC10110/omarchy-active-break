@@ -379,6 +379,125 @@ function barFace(state, routine, now) {
   }
 }
 
+// ---- routine editing (RoutineEditor.qml)
+//
+// Each function takes a routine and returns a new one without touching its
+// input, so QML bindings on the editor's draft see every change. Exercises
+// created in the editor carry a temporary "new:<n>" id until finalizeIds()
+// names them at save time; a slug never contains ":", so the two can't clash.
+
+var GROUP_ORDER = ["legs", "push", "hinge", "pull", "core"]
+var EQUIPMENT_ORDER = ["dumbbells", "kettlebell", "barbell", "rack", "bench", "pullup_bar"]
+var EXERCISE_FIELDS = ["name", "group", "equipment", "sets", "reps", "cue"]
+var WEEK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+var NEW_ID = "new:"
+
+function cloneRoutine(routine) { return JSON.parse(JSON.stringify(routine)) }
+
+function rank(order, value) {
+  var i = order.indexOf(value)
+  return i === -1 ? order.length : i
+}
+
+// "Goblet Squat!" → "goblet-squat". Accents are dropped where the engine can.
+function slug(name) {
+  var s = String(name || "")
+  if (typeof s.normalize === "function") s = s.normalize("NFD").replace(/[̀-ͯ]/g, "")
+  s = s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+  return s || "exercise"
+}
+
+function exerciseId(name, routine) {
+  var base = slug(name)
+  var id = base
+  for (var n = 2; findExercise(routine, id); n++) id = base + "-" + n
+  return id
+}
+
+function newExercise(routine, group) {
+  var r = cloneRoutine(routine)
+  var n = 1
+  while (findExercise(r, NEW_ID + n)) n++
+  var id = NEW_ID + n
+  r.exercises.push({ id: id, name: "", group: group || "legs", equipment: [], sets: 3, reps: "10", cue: "" })
+  return { routine: r, id: id }
+}
+
+function updateExercise(routine, id, fields) {
+  var r = cloneRoutine(routine)
+  var ex = findExercise(r, id)
+  if (!ex || !fields) return r
+  EXERCISE_FIELDS.forEach(function(key) {
+    if (fields[key] !== undefined) ex[key] = Array.isArray(fields[key]) ? fields[key].slice() : fields[key]
+  })
+  return r
+}
+
+function toggleEquipment(routine, id, key) {
+  var ex = findExercise(routine, id)
+  if (!ex) return cloneRoutine(routine)
+  var next = ex.equipment.indexOf(key) !== -1 ? ex.equipment.filter(function(k) { return k !== key })
+                                              : ex.equipment.concat([key])
+  next.sort(function(a, b) { return rank(EQUIPMENT_ORDER, a) - rank(EQUIPMENT_ORDER, b) })
+  return updateExercise(routine, id, { equipment: next })
+}
+
+// A day with no focus and no exercises is the same as no plan: drop it.
+function pruneDays(r) {
+  for (var day in r.plan) {
+    if (r.plan[day].focus === "" && r.plan[day].exercises.length === 0) delete r.plan[day]
+  }
+  return r
+}
+
+function removeExercise(routine, id) {
+  var r = cloneRoutine(routine)
+  r.exercises = r.exercises.filter(function(e) { return e.id !== id })
+  for (var day in r.plan) {
+    r.plan[day].exercises = r.plan[day].exercises.filter(function(x) { return x !== id })
+  }
+  return pruneDays(r)
+}
+
+function exerciseUsage(routine, id) {
+  return WEEK.filter(function(day) {
+    return routine.plan[day] !== undefined && routine.plan[day].exercises.indexOf(id) !== -1
+  })
+}
+
+// "a", "a and b", "a, b and c"
+function listText(items) {
+  if (items.length <= 1) return items.join("")
+  return items.slice(0, -1).join(", ") + " and " + items[items.length - 1]
+}
+
+function deleteText(routine, id) {
+  var ex = findExercise(routine, id)
+  var name = ex ? ex.name.trim() : ""
+  var question = name !== "" ? "Delete " + name + "?" : "Delete this exercise?"
+  var days = exerciseUsage(routine, id).map(function(d) { return DAY_NAMES[DAY_KEYS.indexOf(d)] })
+  if (days.length === 0) return question
+  return question + " It's in the " + listText(days)
+         + (days.length === 1 ? " plan; it will be removed from it." : " plans; it will be removed from them.")
+}
+
+// Gives each "new:<n>" exercise its real id, from the name it ended up with,
+// and follows the rename in the plan. Existing ids never change.
+function finalizeIds(routine) {
+  var r = cloneRoutine(routine)
+  var renames = {}
+  r.exercises.forEach(function(e) {
+    if (e.id.indexOf(NEW_ID) !== 0) return
+    var id = exerciseId(e.name, r)
+    renames[e.id] = id
+    e.id = id
+  })
+  for (var day in r.plan) {
+    r.plan[day].exercises = r.plan[day].exercises.map(function(x) { return renames[x] || x })
+  }
+  return r
+}
+
 if (typeof module !== "undefined") {
   module.exports = { MIN: MIN, DAY_KEYS: DAY_KEYS, MODE_NAMES: MODE_NAMES, clock: clock, dateKey: dateKey,
                      parseClock: parseClock, normalizeConfig: normalizeConfig, inWorkHours: inWorkHours,
@@ -386,5 +505,10 @@ if (typeof module !== "undefined") {
                      initialState: initialState, normalizeState: normalizeState, step: step, apply: apply, act: act,
                      minutesLeft: minutesLeft, clockLeft: clockLeft, prescription: prescription,
                      equipmentText: equipmentText, groupText: groupText, modeText: modeText,
-                     scheduleText: scheduleText, barFace: barFace }
+                     scheduleText: scheduleText, barFace: barFace,
+                     // routine editing
+                     GROUP_ORDER: GROUP_ORDER, EQUIPMENT_ORDER: EQUIPMENT_ORDER, cloneRoutine: cloneRoutine,
+                     slug: slug, exerciseId: exerciseId, newExercise: newExercise, updateExercise: updateExercise,
+                     toggleEquipment: toggleEquipment, removeExercise: removeExercise,
+                     exerciseUsage: exerciseUsage, deleteText: deleteText, finalizeIds: finalizeIds }
 }

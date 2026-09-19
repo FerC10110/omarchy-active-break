@@ -414,3 +414,91 @@ test("act reports when the action does not apply", () => {
   const r = M.act(M.initialState(), "snooze", config, routine, at(19, 10), first)
   assert.equal(r.changed, false)
 })
+
+// ---- routine editing
+
+test("slug makes ids from names", () => {
+  assert.equal(M.slug("Goblet Squat!"), "goblet-squat")
+  assert.equal(M.slug("  Farmer's walk  "), "farmer-s-walk")
+  assert.equal(M.slug("Búlgara"), "bulgara")
+  assert.equal(M.slug("!!!"), "exercise")
+})
+
+test("exerciseId avoids ids the catalog already has", () => {
+  assert.equal(M.exerciseId("Plank", routine), "plank")
+  const r = M.normalizeRoutine({ exercises: [{ id: "plank", name: "Plank", group: "core" },
+                                             { id: "plank-2", name: "Side plank", group: "core" }] })
+  assert.equal(M.exerciseId("Plank", r), "plank-3")
+})
+
+test("newExercise adds a blank exercise with a temporary id and leaves the input alone", () => {
+  const made = M.newExercise(routine, "push")
+  assert.equal(made.id, "new:1")
+  assert.deepEqual(M.findExercise(made.routine, "new:1"),
+                   { id: "new:1", name: "", group: "push", equipment: [], sets: 3, reps: "10", cue: "" })
+  assert.equal(routine.exercises.length, 5)
+  assert.equal(M.newExercise(made.routine, "legs").id, "new:2")
+})
+
+test("updateExercise changes only the given fields", () => {
+  const r = M.updateExercise(routine, "goblet", { name: "Goblet squat (pause)", sets: 4 })
+  const ex = M.findExercise(r, "goblet")
+  assert.equal(ex.name, "Goblet squat (pause)")
+  assert.equal(ex.sets, 4)
+  assert.equal(ex.reps, "10")
+  assert.equal(M.findExercise(routine, "goblet").name, "Goblet squat")
+})
+
+test("toggleEquipment keeps the equipment in catalog order", () => {
+  let r = M.toggleEquipment(routine, "pushups", "bench")
+  r = M.toggleEquipment(r, "pushups", "dumbbells")
+  assert.deepEqual(M.findExercise(r, "pushups").equipment, ["dumbbells", "bench"])
+  r = M.toggleEquipment(r, "pushups", "bench")
+  assert.deepEqual(M.findExercise(r, "pushups").equipment, ["dumbbells"])
+  assert.deepEqual(M.findExercise(routine, "pushups").equipment, [])
+})
+
+test("removeExercise takes it out of the catalog and every plan day", () => {
+  const r = M.removeExercise(routine, "press")
+  assert.equal(M.findExercise(r, "press"), null)
+  assert.deepEqual(r.plan.mon.exercises, ["pushups"])
+  assert.ok(M.findExercise(routine, "press"))
+})
+
+test("removeExercise drops a plan day it leaves with no focus and no exercises", () => {
+  const r = M.normalizeRoutine({ exercises: [{ id: "a", name: "A", group: "core" }, { id: "b", name: "B", group: "core" }],
+                                 plan: { wed: { focus: "", exercises: ["a"] } } })
+  assert.equal(M.removeExercise(r, "a").plan.wed, undefined)
+})
+
+test("exerciseUsage lists the days that use an exercise, Monday first", () => {
+  const r = M.normalizeRoutine(Object.assign({}, routine, {
+    plan: Object.assign({}, routine.plan, { sun: { focus: "", exercises: ["goblet"] } }) }))
+  assert.deepEqual(M.exerciseUsage(r, "goblet"), ["tue", "sun"])
+  assert.deepEqual(M.exerciseUsage(r, "row"), [])
+})
+
+test("deleteText warns about the plans that use the exercise", () => {
+  assert.equal(M.deleteText(routine, "row"), "Delete Barbell row?")
+  assert.equal(M.deleteText(routine, "goblet"),
+               "Delete Goblet squat? It's in the Tuesday plan; it will be removed from it.")
+  const r = M.normalizeRoutine(Object.assign({}, routine, { plan: {
+    mon: { focus: "", exercises: ["row"] }, wed: { focus: "", exercises: ["row"] }, fri: { focus: "", exercises: ["row"] } } }))
+  assert.equal(M.deleteText(r, "row"),
+               "Delete Barbell row? It's in the Monday, Wednesday and Friday plans; it will be removed from them.")
+  assert.equal(M.deleteText(M.newExercise(routine, "legs").routine, "new:1"), "Delete this exercise?")
+})
+
+test("finalizeIds names new exercises after their final name and fixes the plan", () => {
+  let made = M.newExercise(routine, "core")
+  let r = M.updateExercise(made.routine, made.id, { name: "Dead bug" })
+  made = M.newExercise(r, "core")
+  r = M.updateExercise(made.routine, made.id, { name: "Dead bug" })
+  r = JSON.parse(JSON.stringify(r))
+  r.plan.mon.exercises.push("new:1")
+  const done = M.finalizeIds(r)
+  assert.deepEqual(done.exercises.slice(-2).map(e => e.id), ["dead-bug", "dead-bug-2"])
+  assert.deepEqual(done.plan.mon.exercises, ["press", "pushups", "dead-bug"])
+  assert.equal(M.findExercise(done, "goblet").name, "Goblet squat")
+  assert.deepEqual(r.plan.mon.exercises, ["press", "pushups", "new:1"])
+})
