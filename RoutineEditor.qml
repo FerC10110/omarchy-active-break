@@ -23,7 +23,7 @@ Item {
   property string selectedDay: Model.dayKey(new Date())    // Weekly plan tab
   property string confirmKind: ""                         // delete | restore | discard
 
-  readonly property var tabs: [{ value: "exercises", label: "Exercises" }]
+  readonly property var tabs: [{ value: "exercises", label: "Exercises" }, { value: "plan", label: "Weekly plan" }]
   readonly property var tabFiles: ({ exercises: "ExercisesTab.qml", plan: "PlanTab.qml", rotation: "RotationTab.qml" })
   readonly property bool dirty: draft !== null && service !== null && !Model.sameRoutine(draft, service.routine)
   readonly property string problem: draft !== null ? Model.routineProblem(draft) : ""
