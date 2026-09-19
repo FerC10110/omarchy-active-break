@@ -597,3 +597,20 @@ test("sameRoutine ignores plan key order and sees real edits", () => {
   assert.equal(M.sameRoutine(routine, M.updateExercise(routine, "row", { reps: "10" })), false)
   assert.equal(M.sameRoutine(routine, M.moveGroup(routine, 0, 1)), false)
 })
+
+test("step re-picks when the pending exercise was deleted", () => {
+  const r = M.removeExercise(routine, "press")
+  const { state } = M.step(working({ exerciseId: "press" }), config, r, MON_10 + MIN, first)
+  assert.equal(state.phase, "working")
+  assert.equal(state.dueAt, MON_10 + 30 * MIN)
+  assert.equal(state.exerciseId, "pushups")   // Monday's plan is now just push-ups
+})
+
+test("a break whose exercise was deleted shows another one and keeps its clock", () => {
+  const s = Object.assign(M.initialState(), { phase: "break", breakEndsAt: MON_10 + 10 * MIN, lastTickAt: MON_10,
+                                              exerciseId: "press", workMin: 30, breakMin: 10, mode: "weekly" })
+  const { state } = M.step(s, config, M.removeExercise(routine, "press"), MON_10 + MIN, first)
+  assert.equal(state.phase, "break")
+  assert.equal(state.breakEndsAt, MON_10 + 10 * MIN)
+  assert.equal(state.exerciseId, "pushups")
+})

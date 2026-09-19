@@ -227,6 +227,10 @@ function step(state, config, routine, now, rng) {
   s.lastTickAt = now
   followConfig(s, config, routine, now, rng)
 
+  // The pending exercise was deleted (in the editor or by hand): pick another.
+  if (s.phase !== "off" && s.exerciseId && !findExercise(routine, s.exerciseId))
+    choose(s, config, routine, now, rng, false)
+
   if (s.phase === "paused") {
     if (s.pausedDay === dateKey(new Date(now))) return { state: s, events: events }
     s.phase = "off"
