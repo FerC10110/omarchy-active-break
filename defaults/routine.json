@@ -1,0 +1,44 @@
+{
+  "exercises": [
+    { "id": "goblet-squat", "name": "Goblet squat", "group": "legs", "equipment": ["kettlebell"], "sets": 3, "reps": "10", "cue": "Hold the bell against your chest, elbows inside your knees at the bottom." },
+    { "id": "back-squat", "name": "Back squat", "group": "legs", "equipment": ["barbell", "rack"], "sets": 4, "reps": "6", "cue": "Bar on your traps, knees tracking over your toes." },
+    { "id": "front-squat", "name": "Front squat", "group": "legs", "equipment": ["barbell", "rack"], "sets": 3, "reps": "6", "cue": "Elbows high the whole way, torso upright." },
+    { "id": "reverse-lunge", "name": "Reverse lunge", "group": "legs", "equipment": ["dumbbells"], "sets": 3, "reps": "8/leg", "cue": "Long step back, the back knee brushes the floor." },
+    { "id": "bulgarian-split-squat", "name": "Bulgarian split squat", "group": "legs", "equipment": ["dumbbells", "bench"], "sets": 3, "reps": "8/leg", "cue": "Back foot on the bench, drop straight down without pushing off it." },
+    { "id": "step-up", "name": "Bench step-up", "group": "legs", "equipment": ["dumbbells", "bench"], "sets": 3, "reps": "8/leg", "cue": "Drive through the heel of the top foot, lower under control." },
+
+    { "id": "kettlebell-swing", "name": "Kettlebell swing", "group": "hinge", "equipment": ["kettlebell"], "sets": 4, "reps": "15", "cue": "The hips throw the bell, the arms only guide it. Squeeze your glutes at the top." },
+    { "id": "deadlift", "name": "Barbell deadlift", "group": "hinge", "equipment": ["barbell"], "sets": 4, "reps": "5", "cue": "Bar close to your legs, neutral back, push the floor away." },
+    { "id": "dumbbell-rdl", "name": "Dumbbell Romanian deadlift", "group": "hinge", "equipment": ["dumbbells"], "sets": 3, "reps": "10", "cue": "Push your hips back with soft knees until you feel your hamstrings." },
+    { "id": "hip-thrust", "name": "Barbell hip thrust", "group": "hinge", "equipment": ["barbell", "bench"], "sets": 3, "reps": "10", "cue": "Upper back on the bench, chin tucked, one-second pause at the top." },
+    { "id": "single-leg-deadlift", "name": "Single-leg deadlift", "group": "hinge", "equipment": ["kettlebell"], "sets": 3, "reps": "8/leg", "cue": "Keep your hips level, the free leg rises in line with your back." },
+
+    { "id": "bench-press", "name": "Barbell bench press", "group": "push", "equipment": ["barbell", "rack", "bench"], "sets": 4, "reps": "6", "cue": "Shoulder blades pinched, bar to your sternum. Without a spotter, leave one or two reps in the tank." },
+    { "id": "incline-dumbbell-press", "name": "Incline dumbbell press", "group": "push", "equipment": ["dumbbells", "bench"], "sets": 3, "reps": "10", "cue": "Bench at 30°, elbows at 45° from your torso." },
+    { "id": "overhead-press", "name": "Barbell overhead press", "group": "push", "equipment": ["barbell", "rack"], "sets": 4, "reps": "6", "cue": "Glutes and abs tight, move your head out of the bar's path." },
+    { "id": "arnold-press", "name": "Arnold press", "group": "push", "equipment": ["dumbbells"], "sets": 3, "reps": "10", "cue": "Rotate your palms as you press, without arching your lower back." },
+    { "id": "push-ups", "name": "Push-ups", "group": "push", "equipment": [], "sets": 3, "reps": "max", "cue": "Body in one straight line, chest almost to the floor. Stop two reps short of failure." },
+    { "id": "bench-dips", "name": "Bench dips", "group": "push", "equipment": ["bench"], "sets": 3, "reps": "12", "cue": "Shoulders down and back, lower until your elbows reach 90°." },
+
+    { "id": "pull-ups", "name": "Pull-ups", "group": "pull", "equipment": ["pullup_bar"], "sets": 4, "reps": "max", "cue": "From straight arms to chin over the bar, no swinging." },
+    { "id": "barbell-row", "name": "Barbell row", "group": "pull", "equipment": ["barbell"], "sets": 4, "reps": "8", "cue": "Torso at 45°, pull the bar to your belly button." },
+    { "id": "one-arm-row", "name": "One-arm dumbbell row", "group": "pull", "equipment": ["dumbbells", "bench"], "sets": 3, "reps": "10/arm", "cue": "Knee and hand on the bench, drive your elbow toward your hip." },
+    { "id": "gorilla-row", "name": "Gorilla row", "group": "pull", "equipment": ["kettlebell"], "sets": 3, "reps": "10", "cue": "Two bells on the floor, hinge at the hips, row one side at a time." },
+    { "id": "barbell-curl", "name": "Barbell curl", "group": "pull", "equipment": ["barbell"], "sets": 3, "reps": "10", "cue": "Elbows still at your sides, no swinging from the hips." },
+
+    { "id": "turkish-get-up", "name": "Turkish get-up", "group": "core", "equipment": ["kettlebell"], "sets": 3, "reps": "3/side", "cue": "Slow, eyes on the bell; use a light one." },
+    { "id": "farmers-walk", "name": "Farmer's walk", "group": "core", "equipment": ["dumbbells"], "sets": 3, "reps": "40 s", "cue": "Heavy dumbbells, shoulders back, short steps." },
+    { "id": "hanging-leg-raise", "name": "Hanging leg raise", "group": "core", "equipment": ["pullup_bar"], "sets": 3, "reps": "10", "cue": "Raise your legs without swinging, lower them over two seconds." },
+    { "id": "plank", "name": "Plank", "group": "core", "equipment": [], "sets": 3, "reps": "45 s", "cue": "Glutes and abs tight, don't let your hips sag." },
+    { "id": "thruster", "name": "Dumbbell thruster", "group": "core", "equipment": ["dumbbells"], "sets": 3, "reps": "10", "cue": "A front squat that ends in a press, in one movement." },
+    { "id": "clean-and-press", "name": "Kettlebell clean and press", "group": "core", "equipment": ["kettlebell"], "sets": 3, "reps": "6/side", "cue": "Let the bell roll over your forearm instead of slamming your wrist." }
+  ],
+  "plan": {
+    "mon": { "focus": "Push", "exercises": ["bench-press", "incline-dumbbell-press", "overhead-press", "push-ups", "arnold-press", "bench-dips"] },
+    "tue": { "focus": "Legs", "exercises": ["goblet-squat", "back-squat", "reverse-lunge", "bulgarian-split-squat", "front-squat", "step-up"] },
+    "wed": { "focus": "Pull", "exercises": ["pull-ups", "barbell-row", "one-arm-row", "gorilla-row", "barbell-curl"] },
+    "thu": { "focus": "Hinge and core", "exercises": ["kettlebell-swing", "deadlift", "plank", "dumbbell-rdl", "hip-thrust", "turkish-get-up", "single-leg-deadlift", "hanging-leg-raise"] },
+    "fri": { "focus": "Full body", "exercises": ["thruster", "pull-ups", "kettlebell-swing", "incline-dumbbell-press", "goblet-squat", "clean-and-press", "farmers-walk"] }
+  },
+  "rotation": ["legs", "push", "hinge", "pull", "core"]
+}

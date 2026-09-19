@@ -1,0 +1,416 @@
+// Run with: node --test tests/
+// Dates are built with the local-time Date constructor, so the suite does not
+// depend on TZ. 2026-09-21 is a Monday.
+const test = require("node:test")
+const assert = require("node:assert/strict")
+const M = require("../BreakModel.js")
+
+const MIN = 60000
+const first = () => 0                     // rng that always takes the first candidate
+const at = (d, h, m) => new Date(2026, 8, d, h, m || 0).getTime()
+const MON_10 = at(21, 10)
+
+const routine = M.normalizeRoutine({
+  exercises: [
+    { id: "goblet", name: "Goblet squat", group: "legs", equipment: ["kettlebell"], sets: 3, reps: "10", cue: "Chest up" },
+    { id: "lunge", name: "Reverse lunge", group: "legs", equipment: ["dumbbells"], sets: 3, reps: "8/leg", cue: "" },
+    { id: "pushups", name: "Push-ups", group: "push", equipment: [], sets: 3, reps: "max", cue: "" },
+    { id: "press", name: "Overhead press", group: "push", equipment: ["barbell", "rack"], sets: 4, reps: "6", cue: "" },
+    { id: "row", name: "Barbell row", group: "pull", equipment: ["barbell"], sets: 4, reps: "8", cue: "" }
+  ],
+  plan: {
+    mon: { focus: "Push", exercises: ["press", "pushups"] },
+    tue: { focus: "Legs", exercises: ["goblet", "lunge", "missing"] }
+  },
+  rotation: ["legs", "push", "pull", "core"]
+})
+
+const config = M.normalizeConfig({})
+
+function working(overrides) {
+  return Object.assign(M.initialState(), {
+    phase: "working", dueAt: MON_10 + 30 * MIN, lastTickAt: MON_10, exerciseId: "press"
+  }, overrides || {})
+}
+
+// ---- config
+
+test("normalizeConfig fills defaults", () => {
+  assert.deepEqual(config, {
+    work: 30, break: 10, renotify: 5, snooze: 10, mode: "weekly", sound: true,
+    schedule: { days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00" }
+  })
+})
+
+test("normalizeConfig clamps numbers and rejects bad values", () => {
+  const c = M.normalizeConfig({ work: 0, break: 500, renotify: "x", mode: "chaos", sound: false,
+                                schedule: { days: ["mon", "holiday"], start: "25:00", end: "17:30" } })
+  assert.equal(c.work, 1)
+  assert.equal(c.break, 60)
+  assert.equal(c.renotify, 5)
+  assert.equal(c.mode, "weekly")
+  assert.equal(c.sound, false)
+  assert.deepEqual(c.schedule, { days: ["mon"], start: "09:00", end: "17:30" })
+})
+
+// ---- routine
+
+test("normalizeRoutine drops unknown ids from the plan and incomplete exercises", () => {
+  const r = M.normalizeRoutine({ exercises: [{ id: "a", name: "A", group: "core" }, { name: "no id" }],
+                                 plan: { mon: { exercises: ["a", "b"] } } })
+  assert.deepEqual(r.exercises.map(e => e.id), ["a"])
+  assert.deepEqual(r.plan.mon.exercises, ["a"])
+  assert.deepEqual(routine.plan.tue.exercises, ["goblet", "lunge"])
+})
+
+// ---- schedule
+
+test("inWorkHours respects days and the [start, end) window", () => {
+  const s = config.schedule
+  assert.equal(M.inWorkHours(s, new Date(MON_10)), true)
+  assert.equal(M.inWorkHours(s, new Date(at(21, 8, 59))), false)
+  assert.equal(M.inWorkHours(s, new Date(at(21, 9))), true)
+  assert.equal(M.inWorkHours(s, new Date(at(21, 18))), false)
+  assert.equal(M.inWorkHours(s, new Date(at(19, 10))), false)   // Saturday
+})
+
+// ---- picking
+
+test("weekly mode walks the day's plan in order and cycles", () => {
+  let memo = {}
+  const picked = []
+  for (let i = 0; i < 3; i++) {
+    const r = M.pickExercise("weekly", routine, memo, new Date(MON_10), first)
+    picked.push(r.exerciseId)
+    memo = r.memo
+  }
+  assert.deepEqual(picked, ["press", "pushups", "press"])
+})
+
+test("weekly mode restarts the plan on a new day", () => {
+  const memo = { planDay: "2026-09-21", planIndex: 1, lastExerciseId: "press" }
+  const r = M.pickExercise("weekly", routine, memo, new Date(at(22, 10)), first)
+  assert.equal(r.exerciseId, "goblet")
+  assert.equal(r.memo.planDay, "2026-09-22")
+  assert.equal(r.memo.planIndex, 1)
+})
+
+test("weekly mode with no plan for the day falls back to the catalog", () => {
+  const r = M.pickExercise("weekly", routine, { lastExerciseId: "goblet" }, new Date(at(23, 10)), first)
+  assert.equal(r.exerciseId, "lunge")
+})
+
+test("rotation mode moves to the next group that has exercises", () => {
+  const r = M.pickExercise("rotation", routine, { lastGroup: "push", lastExerciseId: "press" }, new Date(MON_10), first)
+  assert.equal(r.exerciseId, "row")
+  assert.equal(r.memo.lastGroup, "pull")
+  const wrap = M.pickExercise("rotation", routine, { lastGroup: "pull" }, new Date(MON_10), first)
+  assert.equal(wrap.memo.lastGroup, "legs")   // "core" has no exercises, skipped
+})
+
+test("rotation reroll stays in the same group with another exercise", () => {
+  const r = M.pickExercise("rotation", routine, { lastGroup: "legs", lastExerciseId: "goblet" },
+                           new Date(MON_10), first, true)
+  assert.equal(r.exerciseId, "lunge")
+  assert.equal(r.memo.lastGroup, "legs")
+})
+
+test("random mode never repeats the last exercise", () => {
+  const r = M.pickExercise("random", routine, { lastExerciseId: "goblet" }, new Date(MON_10), first)
+  assert.equal(r.exerciseId, "lunge")
+  assert.equal(r.memo.lastExerciseId, "lunge")
+})
+
+// ---- step
+
+test("off starts a work cycle when work hours begin", () => {
+  const r = M.step(M.initialState(), config, routine, MON_10, first)
+  assert.equal(r.state.phase, "working")
+  assert.equal(r.state.dueAt, MON_10 + 30 * MIN)
+  assert.equal(r.state.exerciseId, "press")
+  assert.deepEqual(r.events, [])
+})
+
+test("off stays off outside work hours", () => {
+  const r = M.step(M.initialState(), config, routine, at(19, 10), first)
+  assert.equal(r.state.phase, "off")
+})
+
+test("working becomes due at dueAt and asks for a notification", () => {
+  const before = M.step(working({ lastTickAt: MON_10 + 29 * MIN - 1000 }), config, routine, MON_10 + 29 * MIN, first)
+  assert.equal(before.state.phase, "working")
+  assert.deepEqual(before.events, [])
+  const s = working({ lastTickAt: MON_10 + 30 * MIN - 1000 })
+  const r = M.step(s, config, routine, MON_10 + 30 * MIN, first)
+  assert.equal(r.state.phase, "due")
+  assert.equal(r.state.lastNotifiedAt, MON_10 + 30 * MIN)
+  assert.deepEqual(r.events, ["due"])
+})
+
+test("due notifies again every renotify minutes", () => {
+  const due = working({ phase: "due", lastNotifiedAt: MON_10, lastTickAt: MON_10 + 4 * MIN })
+  const quiet = M.step(due, config, routine, MON_10 + 4 * MIN + 30000, first)
+  assert.deepEqual(quiet.events, [])
+  const again = M.step(Object.assign({}, due, { lastTickAt: MON_10 + 5 * MIN - 1000 }), config, routine,
+                       MON_10 + 5 * MIN, first)
+  assert.deepEqual(again.events, ["due"])
+  assert.equal(again.state.lastNotifiedAt, MON_10 + 5 * MIN)
+})
+
+test("break ends into a new work cycle with a new exercise", () => {
+  const s = working({ phase: "break", breakEndsAt: MON_10 + 10 * MIN, lastTickAt: MON_10 + 10 * MIN - 1000,
+                      exerciseId: "press", lastExerciseId: "press", planDay: "2026-09-21", planIndex: 1 })
+  const r = M.step(s, config, routine, MON_10 + 10 * MIN, first)
+  assert.equal(r.state.phase, "working")
+  assert.equal(r.state.dueAt, MON_10 + 40 * MIN)
+  assert.equal(r.state.exerciseId, "pushups")
+  assert.deepEqual(r.events, ["breakEnd"])
+})
+
+test("working and due turn off when work hours end", () => {
+  const late = at(21, 18)
+  assert.equal(M.step(working({ lastTickAt: late - 1000 }), config, routine, late, first).state.phase, "off")
+  assert.equal(M.step(working({ phase: "due", lastTickAt: late - 1000 }), config, routine, late, first).state.phase, "off")
+})
+
+test("a break in progress finishes even after work hours end", () => {
+  const late = at(21, 18)
+  const s = working({ phase: "break", breakEndsAt: late + 5 * MIN, lastTickAt: late - 1000 })
+  assert.equal(M.step(s, config, routine, late, first).state.phase, "break")
+  const done = M.step(Object.assign({}, s, { lastTickAt: late + 5 * MIN - 1000 }), config, routine, late + 5 * MIN, first)
+  assert.equal(done.state.phase, "off")
+  assert.deepEqual(done.events, ["breakEnd"])
+})
+
+test("a gap longer than a break (suspend) restarts the work cycle quietly", () => {
+  const wake = MON_10 + 45 * MIN
+  const r = M.step(working({ lastTickAt: MON_10 + 5 * MIN }), config, routine, wake, first)
+  assert.equal(r.state.phase, "working")
+  assert.equal(r.state.dueAt, wake + 30 * MIN)
+  assert.equal(r.state.exerciseId, "press")        // not done yet, so it stays
+  assert.deepEqual(r.events, [])
+  const fromDue = M.step(working({ phase: "due", lastTickAt: MON_10 + 5 * MIN }), config, routine, wake, first)
+  assert.equal(fromDue.state.phase, "working")
+})
+
+test("a break that ended during a gap closes without notifying", () => {
+  const s = working({ phase: "break", breakEndsAt: MON_10 + 10 * MIN, lastTickAt: MON_10 + 5 * MIN })
+  const r = M.step(s, config, routine, MON_10 + 60 * MIN, first)
+  assert.equal(r.state.phase, "working")
+  assert.deepEqual(r.events, [])
+})
+
+test("paused stays paused the same day and clears on the next workday", () => {
+  const paused = working({ phase: "paused", remainingMs: 12 * MIN, pausedDay: "2026-09-21" })
+  assert.equal(M.step(paused, config, routine, MON_10 + 90 * MIN, first).state.phase, "paused")
+  const nextDay = M.step(paused, config, routine, at(22, 9, 30), first)
+  assert.equal(nextDay.state.phase, "working")
+  assert.equal(nextDay.state.remainingMs, null)
+})
+
+test("step always records lastTickAt", () => {
+  const r = M.step(working(), config, routine, MON_10 + MIN, first)
+  assert.equal(r.state.lastTickAt, MON_10 + MIN)
+})
+
+// ---- actions
+
+test("startBreak from due or working runs the break clock", () => {
+  for (const phase of ["due", "working"]) {
+    const r = M.apply(working({ phase: phase }), "startBreak", config, routine, MON_10, first)
+    assert.equal(r.state.phase, "break")
+    assert.equal(r.state.breakEndsAt, MON_10 + 10 * MIN)
+  }
+})
+
+test("snooze keeps the exercise and pushes dueAt", () => {
+  const r = M.apply(working({ phase: "due" }), "snooze", config, routine, MON_10, first)
+  assert.equal(r.state.phase, "working")
+  assert.equal(r.state.dueAt, MON_10 + 10 * MIN)
+  assert.equal(r.state.exerciseId, "press")
+})
+
+test("skip starts a full cycle with the next exercise", () => {
+  const s = working({ phase: "due", lastExerciseId: "press", planDay: "2026-09-21", planIndex: 1 })
+  const r = M.apply(s, "skip", config, routine, MON_10, first)
+  assert.equal(r.state.phase, "working")
+  assert.equal(r.state.dueAt, MON_10 + 30 * MIN)
+  assert.equal(r.state.exerciseId, "pushups")
+})
+
+test("finishBreak ends the break early into a new cycle", () => {
+  const s = working({ phase: "break", breakEndsAt: MON_10 + 8 * MIN, lastExerciseId: "press",
+                      planDay: "2026-09-21", planIndex: 1 })
+  const r = M.apply(s, "finishBreak", config, routine, MON_10, first)
+  assert.equal(r.state.phase, "working")
+  assert.equal(r.state.exerciseId, "pushups")
+  assert.deepEqual(r.events, [])
+})
+
+test("pause keeps the remaining time and resume restores it", () => {
+  const paused = M.apply(working(), "pause", config, routine, MON_10 + 12 * MIN, first).state
+  assert.equal(paused.phase, "paused")
+  assert.equal(paused.remainingMs, 18 * MIN)
+  assert.equal(paused.pausedDay, "2026-09-21")
+  const resumed = M.apply(paused, "resume", config, routine, MON_10 + 60 * MIN, first).state
+  assert.equal(resumed.phase, "working")
+  assert.equal(resumed.dueAt, MON_10 + 78 * MIN)
+})
+
+test("togglePause flips between paused and working", () => {
+  const p = M.apply(working(), "togglePause", config, routine, MON_10, first).state
+  assert.equal(p.phase, "paused")
+  assert.equal(M.apply(p, "togglePause", config, routine, MON_10, first).state.phase, "working")
+})
+
+test("resume outside work hours lands in off", () => {
+  const p = working({ phase: "paused", remainingMs: 5 * MIN, pausedDay: "2026-09-21" })
+  assert.equal(M.apply(p, "resume", config, routine, at(21, 19), first).state.phase, "off")
+})
+
+test("reroll swaps the exercise without touching the clock", () => {
+  const s = working({ lastExerciseId: "press", planDay: "2026-09-21", planIndex: 1 })
+  const r = M.apply(s, "reroll", config, routine, MON_10, first)
+  assert.equal(r.state.exerciseId, "pushups")
+  assert.equal(r.state.dueAt, s.dueAt)
+})
+
+test("actions that do not apply to the phase change nothing", () => {
+  const off = M.initialState()
+  assert.deepEqual(M.apply(off, "snooze", config, routine, MON_10, first).state, off)
+  assert.deepEqual(M.apply(off, "finishBreak", config, routine, MON_10, first).state, off)
+})
+
+test("normalizeState repairs a broken state file", () => {
+  assert.deepEqual(M.normalizeState(null), M.initialState())
+  assert.equal(M.normalizeState({ phase: "bailando" }).phase, "off")
+  assert.equal(M.normalizeState({ phase: "working", dueAt: 5 }).dueAt, 5)
+})
+
+// ---- text
+
+test("countdown formats", () => {
+  assert.equal(M.minutesLeft(18 * MIN - 1000), "18m")
+  assert.equal(M.minutesLeft(0), "0m")
+  assert.equal(M.minutesLeft(95 * MIN), "1h35")
+  assert.equal(M.clockLeft(7 * MIN + 32000), "7:32")
+  assert.equal(M.clockLeft(-5), "0:00")
+  assert.equal(M.clock(new Date(at(21, 9, 5))), "09:05")
+})
+
+test("prescription and equipment labels", () => {
+  const ex = routine.exercises.find(e => e.id === "press")
+  assert.equal(M.prescription(ex), "4 × 6")
+  assert.equal(M.equipmentText(ex), "Barbell · Rack")
+  assert.equal(M.equipmentText(routine.exercises.find(e => e.id === "pushups")), "Bodyweight")
+})
+
+test("modeText names the day's focus in weekly mode", () => {
+  assert.equal(M.modeText(config, routine, new Date(MON_10)), "Weekly plan · Monday: Push")
+  assert.equal(M.modeText(Object.assign({}, config, { mode: "rotation" }), routine, new Date(MON_10)),
+               "Muscle-group rotation")
+})
+
+test("barFace per phase", () => {
+  const now = MON_10 + 12 * MIN
+  const w = M.barFace(working(), routine, now)
+  assert.equal(w.text, "18m")
+  assert.equal(w.tone, "normal")
+  assert.match(w.tooltip, /Next break 10:30 · Overhead press/)
+  const d = M.barFace(working({ phase: "due" }), routine, now)
+  assert.equal(d.tone, "urgent")
+  assert.equal(d.text, "Go!")
+  assert.match(d.tooltip, /Time to move! Overhead press · 4 × 6/)
+  const b = M.barFace(working({ phase: "break", breakEndsAt: now + 7 * MIN + 32000 }), routine, now)
+  assert.equal(b.text, "7:32")
+  assert.equal(b.tone, "accent")
+  const off = M.barFace(M.initialState(), routine, now)
+  assert.equal(off.tone, "dim")
+  assert.equal(off.tooltip, "Active Break · outside work hours")
+  assert.equal(M.barFace(working({ phase: "paused", remainingMs: MIN }), routine, now).tone, "dim")
+})
+
+test("scheduleText lists days in week order", () => {
+  assert.equal(M.scheduleText(config.schedule), "Mon Tue Wed Thu Fri · 09:00–18:00")
+  assert.equal(M.scheduleText({ days: ["sun", "mon"], start: "08:00", end: "12:00" }), "Mon Sun · 08:00–12:00")
+  assert.equal(M.scheduleText({ days: [], start: "08:00", end: "12:00" }), "no days · 08:00–12:00")
+})
+
+test("bundled defaults are valid as shipped", () => {
+  const raw = require("../defaults/routine.json")
+  const r = M.normalizeRoutine(raw)
+  assert.equal(r.exercises.length, raw.exercises.length)
+  assert.equal(new Set(r.exercises.map(e => e.id)).size, r.exercises.length)
+  for (const day in raw.plan) assert.deepEqual(r.plan[day].exercises, raw.plan[day].exercises)
+  for (const g of r.rotation) assert.ok(r.exercises.some(e => e.group === g), "group without exercises: " + g)
+  assert.deepEqual(M.normalizeConfig(require("../defaults/config.json")), M.normalizeConfig({}))
+})
+
+// ---- settings changed mid-cycle (the running clock follows the new values)
+
+test("shortening work while working brings the break forward", () => {
+  const s = working({ workMin: 30, lastTickAt: MON_10 + 5 * MIN - 1000 })
+  const r = M.step(s, M.normalizeConfig({ work: 1 }), routine, MON_10 + 5 * MIN, first)
+  assert.equal(r.state.phase, "due")
+  assert.deepEqual(r.events, ["due"])
+  assert.equal(r.state.workMin, 1)
+})
+
+test("lengthening work while working pushes the break back", () => {
+  const s = working({ workMin: 30, lastTickAt: MON_10 + 5 * MIN - 1000 })
+  const r = M.step(s, M.normalizeConfig({ work: 45 }), routine, MON_10 + 5 * MIN, first)
+  assert.equal(r.state.dueAt, MON_10 + 45 * MIN)
+})
+
+test("changing the break length during a break moves its end", () => {
+  const s = working({ phase: "break", breakMin: 10, breakEndsAt: MON_10 + 10 * MIN, lastTickAt: MON_10 + MIN - 1000 })
+  const r = M.step(s, M.normalizeConfig({ break: 5 }), routine, MON_10 + MIN, first)
+  assert.equal(r.state.breakEndsAt, MON_10 + 5 * MIN)
+  assert.equal(r.state.breakMin, 5)
+})
+
+test("a state without recorded durations adopts the config as is", () => {
+  const r = M.step(working({ lastTickAt: MON_10 + MIN - 1000 }), M.normalizeConfig({ work: 45 }), routine, MON_10 + MIN, first)
+  assert.equal(r.state.dueAt, MON_10 + 30 * MIN)
+  assert.equal(r.state.workMin, 45)
+})
+
+test("changing the mode while working re-picks the upcoming exercise", () => {
+  const s = working({ mode: "weekly", lastExerciseId: "press", lastTickAt: MON_10 + MIN - 1000 })
+  const r = M.step(s, M.normalizeConfig({ mode: "rotation" }), routine, MON_10 + MIN, first)
+  assert.equal(r.state.exerciseId, "goblet")
+  assert.equal(r.state.mode, "rotation")
+})
+
+test("a cycle records the durations and mode it started with", () => {
+  const r = M.step(M.initialState(), config, routine, MON_10, first)
+  assert.equal(r.state.workMin, 30)
+  assert.equal(r.state.breakMin, 10)
+  assert.equal(r.state.mode, "weekly")
+})
+
+// ---- act: an action first brings the clock up to date, then applies
+
+test("act catches up on a gap before applying the action", () => {
+  // Woke from a long suspend: the pending cycle is stale. Pausing must pause
+  // the fresh cycle the gap starts, not the stale one (which had 0 left).
+  const stale = working({ workMin: 30, breakMin: 10, mode: "weekly", lastTickAt: MON_10 + 5 * MIN })
+  const wake = MON_10 + 3 * 60 * MIN
+  const r = M.act(stale, "pause", config, routine, wake, first)
+  assert.equal(r.state.phase, "paused")
+  assert.equal(r.state.remainingMs, 30 * MIN)
+  assert.equal(r.changed, true)
+})
+
+test("act drops a due notice that the action already answers", () => {
+  const s = working({ workMin: 30, breakMin: 10, mode: "weekly", lastTickAt: MON_10 + 30 * MIN - 1000 })
+  const r = M.act(s, "snooze", config, routine, MON_10 + 30 * MIN, first)
+  assert.deepEqual(r.events, [])
+  assert.equal(r.state.phase, "working")
+  assert.equal(r.state.dueAt, MON_10 + 40 * MIN)
+})
+
+test("act reports when the action does not apply", () => {
+  const r = M.act(M.initialState(), "snooze", config, routine, at(19, 10), first)
+  assert.equal(r.changed, false)
+})

@@ -1,0 +1,13 @@
+{
+  "work": 30,
+  "break": 10,
+  "renotify": 5,
+  "snooze": 10,
+  "mode": "weekly",
+  "sound": true,
+  "schedule": {
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "start": "09:00",
+    "end": "18:00"
+  }
+}

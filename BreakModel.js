@@ -1,0 +1,390 @@
+// Pure logic for Active Break: config/routine cleanup, the work/break state
+// machine, exercise picking and the texts the bar and panel show. No QML in
+// here, so node can test it (tests/model.test.js); QML ignores the
+// module.exports block at the end, the same trick as Recognition's Format.js.
+//
+// Time is always epoch milliseconds passed in by the caller, and randomness
+// comes from an injected rng() in [0, 1), so every function is deterministic.
+
+var MIN = 60000
+var PHASES = ["off", "working", "due", "break", "paused"]
+var MODES = ["weekly", "rotation", "random"]
+var DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]   // index = Date.getDay()
+var DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+var MODE_NAMES = { weekly: "Weekly plan", rotation: "Muscle-group rotation", random: "Random" }
+var GROUP_NAMES = { legs: "Legs", push: "Push", hinge: "Hinge", pull: "Pull", core: "Core" }
+var EQUIPMENT_NAMES = { dumbbells: "Dumbbells", kettlebell: "Kettlebell", barbell: "Barbell", rack: "Rack",
+                        bench: "Bench", pullup_bar: "Pull-up bar" }
+var DEFAULT_SCHEDULE = { days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00" }
+
+// ---- small helpers
+
+function pad(n) { return n < 10 ? "0" + n : String(n) }
+
+function clock(date) { return pad(date.getHours()) + ":" + pad(date.getMinutes()) }
+
+// Local calendar day, "2026-09-21".
+function dateKey(date) {
+  return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate())
+}
+
+function dayKey(date) { return DAY_KEYS[date.getDay()] }
+
+// "09:30" -> 570; anything else -> null.
+function parseClock(text) {
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(text || ""))
+  if (!m) return null
+  var h = Number(m[1]), min = Number(m[2])
+  if (h > 23 || min > 59) return null
+  return h * 60 + min
+}
+
+function clampInt(value, lo, hi, fallback) {
+  var n = Number(value)
+  if (value === null || value === undefined || value === "" || !isFinite(n)) return fallback
+  return Math.min(hi, Math.max(lo, Math.round(n)))
+}
+
+function copy(obj) { return Object.assign({}, obj) }
+
+// ---- config
+
+function normalizeConfig(raw) {
+  var c = raw && typeof raw === "object" ? raw : {}
+  var s = c.schedule && typeof c.schedule === "object" ? c.schedule : {}
+  var days = Array.isArray(s.days) ? s.days.filter(function(d) { return DAY_KEYS.indexOf(d) !== -1 })
+                                   : DEFAULT_SCHEDULE.days.slice()
+  return {
+    work: clampInt(c.work, 1, 240, 30),
+    break: clampInt(c["break"], 1, 60, 10),
+    renotify: clampInt(c.renotify, 1, 60, 5),
+    snooze: clampInt(c.snooze, 1, 120, 10),
+    mode: MODES.indexOf(c.mode) !== -1 ? c.mode : "weekly",
+    sound: c.sound !== false,
+    schedule: {
+      days: days,
+      start: parseClock(s.start) !== null ? s.start : DEFAULT_SCHEDULE.start,
+      end: parseClock(s.end) !== null ? s.end : DEFAULT_SCHEDULE.end
+    }
+  }
+}
+
+function inWorkHours(schedule, date) {
+  if (schedule.days.indexOf(dayKey(date)) === -1) return false
+  var minute = date.getHours() * 60 + date.getMinutes()
+  return minute >= parseClock(schedule.start) && minute < parseClock(schedule.end)
+}
+
+// ---- routine
+
+// Keeps exercises that have at least an id, a name and a group, and drops plan
+// entries that point at ids the catalog doesn't have.
+function normalizeRoutine(raw) {
+  var r = raw && typeof raw === "object" ? raw : {}
+  var exercises = (Array.isArray(r.exercises) ? r.exercises : []).filter(function(e) {
+    return e && e.id && e.name && e.group
+  }).map(function(e) {
+    return { id: String(e.id), name: String(e.name), group: String(e.group),
+             equipment: Array.isArray(e.equipment) ? e.equipment.map(String) : [],
+             sets: clampInt(e.sets, 1, 20, 3), reps: String(e.reps || ""), cue: String(e.cue || "") }
+  })
+  var ids = exercises.map(function(e) { return e.id })
+  var plan = {}
+  var rawPlan = r.plan && typeof r.plan === "object" ? r.plan : {}
+  for (var key in rawPlan) {
+    if (DAY_KEYS.indexOf(key) === -1) continue
+    var day = rawPlan[key] || {}
+    plan[key] = { focus: String(day.focus || ""),
+                  exercises: (Array.isArray(day.exercises) ? day.exercises : []).filter(function(id) {
+                    return ids.indexOf(id) !== -1
+                  }) }
+  }
+  var rotation = Array.isArray(r.rotation) ? r.rotation.map(String) : ["legs", "push", "hinge", "pull", "core"]
+  return { exercises: exercises, plan: plan, rotation: rotation }
+}
+
+function findExercise(routine, id) {
+  for (var i = 0; i < routine.exercises.length; i++)
+    if (routine.exercises[i].id === id) return routine.exercises[i]
+  return null
+}
+
+// ---- picking
+
+function pickFrom(list, avoidId, rng) {
+  var candidates = list.length > 1 ? list.filter(function(e) { return e.id !== avoidId }) : list
+  if (candidates.length === 0) return null
+  return candidates[Math.min(candidates.length - 1, Math.floor(rng() * candidates.length))]
+}
+
+// memo carries what picking needs to remember between breaks:
+// { lastExerciseId, lastGroup, planDay, planIndex }. Returns the chosen id
+// (null when the catalog is empty) and the updated memo. `reroll` asks for a
+// different exercise for the same slot: in rotation mode it stays in the group.
+function pickExercise(mode, routine, memo, date, rng, reroll) {
+  var next = copy(memo || {})
+  var exercise = null
+
+  if (mode === "weekly") {
+    var day = routine.plan[dayKey(date)]
+    var list = day ? day.exercises : []
+    if (list.length > 0) {
+      var today = dateKey(date)
+      var index = next.planDay === today ? (next.planIndex || 0) : 0
+      exercise = findExercise(routine, list[index % list.length])
+      next.planDay = today
+      next.planIndex = index + 1
+    }
+  } else if (mode === "rotation") {
+    var groups = routine.rotation.filter(function(g) {
+      return routine.exercises.some(function(e) { return e.group === g })
+    })
+    if (groups.length > 0) {
+      var group = reroll && groups.indexOf(next.lastGroup) !== -1 ? next.lastGroup
+                : groups[(groups.indexOf(next.lastGroup) + 1) % groups.length]
+      exercise = pickFrom(routine.exercises.filter(function(e) { return e.group === group }), next.lastExerciseId, rng)
+      next.lastGroup = group
+    }
+  }
+
+  // random mode, and the fallback when the plan or rotation has nothing
+  if (!exercise) exercise = pickFrom(routine.exercises, next.lastExerciseId, rng)
+
+  next.lastExerciseId = exercise ? exercise.id : null
+  return { exerciseId: next.lastExerciseId, memo: next }
+}
+
+// ---- state
+
+// workMin, breakMin and mode record the config the running clock was built
+// with, so step() can follow a change made mid-cycle.
+function initialState() {
+  return { phase: "off", dueAt: null, breakEndsAt: null, remainingMs: null, lastNotifiedAt: null,
+           lastTickAt: 0, exerciseId: null, lastExerciseId: null, lastGroup: null, planDay: null,
+           planIndex: 0, pausedDay: null, workMin: null, breakMin: null, mode: null }
+}
+
+function normalizeState(raw) {
+  var s = initialState()
+  if (!raw || typeof raw !== "object") return s
+  for (var key in s) if (raw[key] !== undefined) s[key] = raw[key]
+  if (PHASES.indexOf(s.phase) === -1) s.phase = "off"
+  return s
+}
+
+function memoOf(s) {
+  return { lastExerciseId: s.lastExerciseId, lastGroup: s.lastGroup, planDay: s.planDay, planIndex: s.planIndex }
+}
+
+function choose(s, config, routine, now, rng, reroll) {
+  var picked = pickExercise(config.mode, routine, memoOf(s), new Date(now), rng, reroll)
+  s.exerciseId = picked.exerciseId
+  s.lastExerciseId = picked.memo.lastExerciseId
+  s.lastGroup = picked.memo.lastGroup === undefined ? null : picked.memo.lastGroup
+  s.planDay = picked.memo.planDay === undefined ? null : picked.memo.planDay
+  s.planIndex = picked.memo.planIndex || 0
+}
+
+// A fresh work cycle, or off when outside work hours. `keepExercise` is for
+// restarts where the pending exercise was never done (a suspend gap).
+function startCycle(s, config, routine, now, rng, keepExercise) {
+  s.breakEndsAt = null
+  s.remainingMs = null
+  s.lastNotifiedAt = null
+  s.pausedDay = null
+  if (!inWorkHours(config.schedule, new Date(now))) {
+    s.phase = "off"
+    s.dueAt = null
+    return
+  }
+  s.phase = "working"
+  s.dueAt = now + config.work * MIN
+  if (!keepExercise || !s.exerciseId) choose(s, config, routine, now, rng, false)
+}
+
+// Settings saved mid-cycle: the running clock moves by the difference, and a
+// new mode re-picks the exercise still to come. A state that recorded nothing
+// yet (first run) just adopts the config.
+function followConfig(s, config, routine, now, rng) {
+  if (s.workMin !== null && s.workMin !== config.work && s.phase === "working")
+    s.dueAt = Math.max(now, s.dueAt + (config.work - s.workMin) * MIN)
+  if (s.breakMin !== null && s.breakMin !== config["break"] && s.phase === "break")
+    s.breakEndsAt = Math.max(now, s.breakEndsAt + (config["break"] - s.breakMin) * MIN)
+  if (s.mode !== null && s.mode !== config.mode && s.phase === "working")
+    choose(s, config, routine, now, rng, false)
+  s.workMin = config.work
+  s.breakMin = config["break"]
+  s.mode = config.mode
+}
+
+// Advances the clock to `now`. Returns the new state and the events the caller
+// must act on: "due" (notify the break) and "breakEnd" (notify back to work).
+function step(state, config, routine, now, rng) {
+  var s = copy(state)
+  var events = []
+  var gap = s.lastTickAt > 0 && now - s.lastTickAt > config["break"] * MIN
+  var inHours = inWorkHours(config.schedule, new Date(now))
+  s.lastTickAt = now
+  followConfig(s, config, routine, now, rng)
+
+  if (s.phase === "paused") {
+    if (s.pausedDay === dateKey(new Date(now))) return { state: s, events: events }
+    s.phase = "off"
+    s.remainingMs = null
+    s.pausedDay = null
+  }
+
+  if (s.phase === "off") {
+    if (inHours) startCycle(s, config, routine, now, rng, false)
+  } else if (s.phase === "working" || s.phase === "due") {
+    if (!inHours) {
+      s.phase = "off"
+      s.dueAt = null
+      s.lastNotifiedAt = null
+    } else if (gap) {
+      startCycle(s, config, routine, now, rng, true)
+    } else if (s.phase === "working" && now >= s.dueAt) {
+      s.phase = "due"
+      s.lastNotifiedAt = now
+      events.push("due")
+    } else if (s.phase === "due" && now - s.lastNotifiedAt >= config.renotify * MIN) {
+      s.lastNotifiedAt = now
+      events.push("due")
+    }
+  } else if (s.phase === "break" && now >= s.breakEndsAt) {
+    startCycle(s, config, routine, now, rng, false)
+    if (!gap) events.push("breakEnd")
+  }
+
+  return { state: s, events: events }
+}
+
+// A user action. Actions that don't apply to the current phase return the
+// state unchanged.
+function apply(state, action, config, routine, now, rng) {
+  var s = copy(state)
+  var phase = s.phase
+
+  if (action === "togglePause") action = phase === "paused" ? "resume" : "pause"
+
+  if (action === "startBreak" && (phase === "working" || phase === "due")) {
+    s.phase = "break"
+    s.breakEndsAt = now + config["break"] * MIN
+    s.lastNotifiedAt = null
+  } else if (action === "snooze" && phase === "due") {
+    s.phase = "working"
+    s.dueAt = now + config.snooze * MIN
+    s.lastNotifiedAt = null
+  } else if (action === "skip" && phase === "due") {
+    startCycle(s, config, routine, now, rng, false)
+  } else if (action === "finishBreak" && phase === "break") {
+    startCycle(s, config, routine, now, rng, false)
+  } else if (action === "pause" && (phase === "working" || phase === "due")) {
+    s.remainingMs = phase === "due" ? 0 : Math.max(0, s.dueAt - now)
+    s.phase = "paused"
+    s.pausedDay = dateKey(new Date(now))
+    s.lastNotifiedAt = null
+  } else if (action === "resume" && phase === "paused") {
+    var remaining = s.remainingMs || 0
+    s.remainingMs = null
+    s.pausedDay = null
+    if (inWorkHours(config.schedule, new Date(now))) {
+      s.phase = "working"
+      s.dueAt = now + remaining
+    } else {
+      s.phase = "off"
+      s.dueAt = null
+    }
+  } else if (action === "reroll" && (phase === "working" || phase === "due" || phase === "break")) {
+    choose(s, config, routine, now, rng, true)
+  } else {
+    return { state: state, events: [] }
+  }
+  return { state: s, events: [] }
+}
+
+// What the service runs for a user action: first bring the clock up to `now`
+// (after a suspend the first tick may not have run yet), then apply. A due
+// notice from that catch-up is dropped when the action already answers it.
+// `changed` is false when the action didn't apply.
+function act(state, action, config, routine, now, rng) {
+  var caught = step(state, config, routine, now, rng)
+  var applied = apply(caught.state, action, config, routine, now, rng)
+  var events = caught.events.filter(function(e) { return e !== "due" || applied.state.phase === "due" })
+  return { state: applied.state, events: events, changed: applied.state !== caught.state }
+}
+
+// ---- texts
+
+// "18m", "1h35"; rounds up so the bar never shows 0m while time remains.
+function minutesLeft(ms) {
+  var m = Math.max(0, Math.ceil(ms / MIN))
+  if (m < 60) return m + "m"
+  return Math.floor(m / 60) + "h" + pad(m % 60)
+}
+
+// "7:32"
+function clockLeft(ms) {
+  var s = Math.max(0, Math.ceil(ms / 1000))
+  return Math.floor(s / 60) + ":" + pad(s % 60)
+}
+
+function prescription(ex) {
+  if (!ex) return ""
+  return ex.reps ? ex.sets + " × " + ex.reps : ex.sets + " sets"
+}
+
+function equipmentText(ex) {
+  if (!ex || ex.equipment.length === 0) return "Bodyweight"
+  return ex.equipment.map(function(k) { return EQUIPMENT_NAMES[k] || k }).join(" · ")
+}
+
+function groupText(ex) { return ex ? (GROUP_NAMES[ex.group] || ex.group) : "" }
+
+function modeText(config, routine, date) {
+  var name = MODE_NAMES[config.mode] || config.mode
+  if (config.mode !== "weekly") return name
+  var day = routine.plan[dayKey(date)]
+  var focus = day && day.focus ? day.focus : "no plan"
+  return name + " · " + DAY_NAMES[date.getDay()] + ": " + focus
+}
+
+function scheduleText(schedule) {
+  var labels = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" }
+  var order = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+  var days = order.filter(function(d) { return schedule.days.indexOf(d) !== -1 })
+                  .map(function(d) { return labels[d] }).join(" ")
+  return (days || "no days") + " · " + schedule.start + "–" + schedule.end
+}
+
+// What the bar shows: text next to the icon, a tone (dim | normal | urgent |
+// accent) and the tooltip.
+function barFace(state, routine, now) {
+  var ex = findExercise(routine, state.exerciseId)
+  var name = ex ? ex.name : "no exercise"
+  switch (state.phase) {
+  case "working":
+    return { text: minutesLeft(state.dueAt - now), tone: "normal",
+             tooltip: "Next break " + clock(new Date(state.dueAt)) + " · " + name }
+  case "due":
+    return { text: "Go!", tone: "urgent",
+             tooltip: "Time to move! " + name + (ex ? " · " + prescription(ex) : "") }
+  case "break":
+    return { text: clockLeft(state.breakEndsAt - now), tone: "accent",
+             tooltip: "Break until " + clock(new Date(state.breakEndsAt)) + " · " + name }
+  case "paused":
+    return { text: "", tone: "dim", tooltip: "Active Break paused · right click to resume" }
+  default:
+    return { text: "", tone: "dim", tooltip: "Active Break · outside work hours" }
+  }
+}
+
+if (typeof module !== "undefined") {
+  module.exports = { MIN: MIN, DAY_KEYS: DAY_KEYS, MODE_NAMES: MODE_NAMES, clock: clock, dateKey: dateKey,
+                     parseClock: parseClock, normalizeConfig: normalizeConfig, inWorkHours: inWorkHours,
+                     normalizeRoutine: normalizeRoutine, findExercise: findExercise, pickExercise: pickExercise,
+                     initialState: initialState, normalizeState: normalizeState, step: step, apply: apply, act: act,
+                     minutesLeft: minutesLeft, clockLeft: clockLeft, prescription: prescription,
+                     equipmentText: equipmentText, groupText: groupText, modeText: modeText,
+                     scheduleText: scheduleText, barFace: barFace }
+}
