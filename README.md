@@ -29,9 +29,9 @@ It never locks your screen and doesn't log what you did.
 
 ## Install
 
-With the plugin folder at `~/.config/omarchy/plugins/io.github.ferc10110.active-break`:
-
 ```bash
+git clone https://github.com/FerC10110/omarchy-active-break.git \
+  ~/.config/omarchy/plugins/io.github.ferc10110.active-break
 omarchy plugin enable io.github.ferc10110.active-break
 ```
 
