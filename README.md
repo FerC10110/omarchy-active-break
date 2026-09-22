@@ -40,14 +40,6 @@ and puts the widget in the bar. To move it, use `omarchy bar move
 io.github.ferc10110.active-break --section right`; to get a newer version,
 `omarchy plugin update io.github.ferc10110.active-break`.
 
-By hand instead:
-
-```bash
-git clone https://github.com/FerC10110/omarchy-active-break.git \
-  ~/.config/omarchy/plugins/io.github.ferc10110.active-break
-omarchy plugin enable io.github.ferc10110.active-break
-```
-
 Nothing else is needed: it uses `omarchy-notification-send` for reminders and
 `pw-play` for the chime.
 
