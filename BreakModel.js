@@ -47,6 +47,16 @@ function clampInt(value, lo, hi, fallback) {
 
 function copy(obj) { return Object.assign({}, obj) }
 
+// Every text the model builds goes through here: `t` is the caller's
+// translator (I18n.t bound to a language) and its absence means English.
+function tr(t, s, args) {
+  if (t) return t(s, args)
+  if (!args) return s
+  var out = s
+  for (var i = 0; i < args.length; i++) out = out.split("%" + (i + 1)).join(String(args[i]))
+  return out
+}
+
 // ---- config
 
 function normalizeConfig(raw) {
@@ -334,53 +344,56 @@ function clockLeft(ms) {
   return Math.floor(s / 60) + ":" + pad(s % 60)
 }
 
-function prescription(ex) {
+function prescription(ex, t) {
   if (!ex) return ""
-  return ex.reps ? ex.sets + " × " + ex.reps : ex.sets + " sets"
+  return ex.reps ? ex.sets + " × " + ex.reps : tr(t, "%1 sets", [ex.sets])
 }
 
-function equipmentText(ex) {
-  if (!ex || ex.equipment.length === 0) return "Bodyweight"
-  return ex.equipment.map(function(k) { return EQUIPMENT_NAMES[k] || k }).join(" · ")
+function equipmentText(ex, t) {
+  if (!ex || ex.equipment.length === 0) return tr(t, "Bodyweight")
+  return ex.equipment.map(function(k) { return tr(t, EQUIPMENT_NAMES[k] || k) }).join(" · ")
 }
 
-function groupText(ex) { return ex ? (GROUP_NAMES[ex.group] || ex.group) : "" }
+function groupText(ex, t) { return ex ? tr(t, GROUP_NAMES[ex.group] || ex.group) : "" }
 
-function modeText(config, routine, date) {
-  var name = MODE_NAMES[config.mode] || config.mode
+function modeText(config, routine, date, t) {
+  var name = tr(t, MODE_NAMES[config.mode] || config.mode)
   if (config.mode !== "weekly") return name
   var day = routine.plan[dayKey(date)]
-  var focus = day && day.focus ? day.focus : "no plan"
-  return name + " · " + DAY_NAMES[date.getDay()] + ": " + focus
+  // day.focus is user data from routine.json (via PlanTab), not UI text: only
+  // the "no plan" fallback goes through t().
+  var focus = day && day.focus ? day.focus : tr(t, "no plan")
+  return name + " · " + tr(t, DAY_NAMES[date.getDay()]) + ": " + focus
 }
 
-function scheduleText(schedule) {
+function scheduleText(schedule, t) {
   var labels = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" }
   var order = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
   var days = order.filter(function(d) { return schedule.days.indexOf(d) !== -1 })
-                  .map(function(d) { return labels[d] }).join(" ")
-  return (days || "no days") + " · " + schedule.start + "–" + schedule.end
+                  .map(function(d) { return tr(t, labels[d]) }).join(" ")
+  return (days || tr(t, "no days")) + " · " + schedule.start + "–" + schedule.end
 }
 
 // What the bar shows: text next to the icon, a tone (dim | normal | urgent |
 // accent) and the tooltip.
-function barFace(state, routine, now) {
+function barFace(state, routine, now, t) {
   var ex = findExercise(routine, state.exerciseId)
-  var name = ex ? ex.name : "no exercise"
+  var name = ex ? ex.name : tr(t, "no exercise")
   switch (state.phase) {
   case "working":
     return { text: minutesLeft(state.dueAt - now), tone: "normal",
-             tooltip: "Next break " + clock(new Date(state.dueAt)) + " · " + name }
+             tooltip: tr(t, "Next break %1 · %2", [clock(new Date(state.dueAt)), name]) }
   case "due":
-    return { text: "Go!", tone: "urgent",
-             tooltip: "Time to move! " + name + (ex ? " · " + prescription(ex) : "") }
+    return { text: tr(t, "Go!"), tone: "urgent",
+             tooltip: ex ? tr(t, "Time to move! %1 · %2", [name, prescription(ex, t)])
+                         : tr(t, "Time to move! %1", [name]) }
   case "break":
     return { text: clockLeft(state.breakEndsAt - now), tone: "accent",
-             tooltip: "Break until " + clock(new Date(state.breakEndsAt)) + " · " + name }
+             tooltip: tr(t, "Break until %1 · %2", [clock(new Date(state.breakEndsAt)), name]) }
   case "paused":
-    return { text: "", tone: "dim", tooltip: "Active Break paused · right click to resume" }
+    return { text: "", tone: "dim", tooltip: tr(t, "Active Break paused · right click to resume") }
   default:
-    return { text: "", tone: "dim", tooltip: "Active Break · outside work hours" }
+    return { text: "", tone: "dim", tooltip: tr(t, "Active Break · outside work hours") }
   }
 }
 
@@ -471,19 +484,20 @@ function exerciseUsage(routine, id) {
 }
 
 // "a", "a and b", "a, b and c"
-function listText(items) {
+function listText(items, t) {
   if (items.length <= 1) return items.join("")
-  return items.slice(0, -1).join(", ") + " and " + items[items.length - 1]
+  return items.slice(0, -1).join(", ") + " " + tr(t, "and") + " " + items[items.length - 1]
 }
 
-function deleteText(routine, id) {
+function deleteText(routine, id, t) {
   var ex = findExercise(routine, id)
   var name = ex ? ex.name.trim() : ""
-  var question = name !== "" ? "Delete " + name + "?" : "Delete this exercise?"
-  var days = exerciseUsage(routine, id).map(function(d) { return DAY_NAMES[DAY_KEYS.indexOf(d)] })
+  var question = name !== "" ? tr(t, "Delete %1?", [name]) : tr(t, "Delete this exercise?")
+  var days = exerciseUsage(routine, id).map(function(d) { return tr(t, DAY_NAMES[DAY_KEYS.indexOf(d)]) })
   if (days.length === 0) return question
-  return question + " It's in the " + listText(days)
-         + (days.length === 1 ? " plan; it will be removed from it." : " plans; it will be removed from them.")
+  var template = days.length === 1 ? "It's in the %1 plan; it will be removed from it."
+                                    : "It's in the %1 plans; it will be removed from them."
+  return question + " " + tr(t, template, [listText(days, t)])
 }
 
 // Prepares the draft for saving: trims every exercise's name, then gives
@@ -545,11 +559,11 @@ function moveInDay(routine, day, from, to) {
 }
 
 // The "Add exercise…" choices for a day: named exercises not in it yet.
-function dayOptions(routine, day) {
+function dayOptions(routine, day, t) {
   var taken = routine.plan[day] ? routine.plan[day].exercises : []
   return routine.exercises.filter(function(e) { return e.name.trim() !== "" && taken.indexOf(e.id) === -1 })
     .sort(byName)
-    .map(function(e) { return { value: e.id, label: e.name, description: GROUP_NAMES[e.group] || e.group } })
+    .map(function(e) { return { value: e.id, label: e.name, description: groupText(e, t) } })
 }
 
 function moveGroup(routine, from, to) {
@@ -567,24 +581,24 @@ function toggleGroup(routine, group) {
   return r
 }
 
-function countText(n) { return n === 1 ? "1 exercise" : n + " exercises" }
+function countText(n, t) { return n === 1 ? tr(t, "1 exercise") : tr(t, "%1 exercises", [n]) }
 
 // Included groups first, in rotation order (so a row's index is its index in
 // `rotation`), then the known groups left out.
-function rotationRows(routine) {
+function rotationRows(routine, t) {
   var groups = routine.rotation.slice()
   GROUP_ORDER.forEach(function(g) { if (groups.indexOf(g) === -1) groups.push(g) })
   return groups.map(function(g) {
     var included = routine.rotation.indexOf(g) !== -1
     var count = routine.exercises.filter(function(e) { return e.group === g }).length
-    return { group: g, name: GROUP_NAMES[g] || g, included: included, count: count,
-             detail: included && count === 0 ? "No exercises: skipped" : countText(count) }
+    return { group: g, name: groupText({ group: g }, t), included: included, count: count,
+             detail: included && count === 0 ? tr(t, "No exercises: skipped") : countText(count, t) }
   })
 }
 
 // The editor's exercise list: known groups in GROUP_ORDER, unknown ones after
 // them in order of appearance, each sorted by name. `query` filters by name.
-function catalogSections(routine, query) {
+function catalogSections(routine, query, t) {
   var q = String(query || "").trim().toLowerCase()
   var groups = GROUP_ORDER.slice()
   routine.exercises.forEach(function(e) { if (groups.indexOf(e.group) === -1) groups.push(e.group) })
@@ -593,7 +607,7 @@ function catalogSections(routine, query) {
     var list = routine.exercises.filter(function(e) {
       return e.group === g && (q === "" || e.name.toLowerCase().indexOf(q) !== -1)
     }).sort(byName)
-    if (list.length > 0) sections.push({ group: g, name: GROUP_NAMES[g] || g, exercises: list })
+    if (list.length > 0) sections.push({ group: g, name: groupText({ group: g }, t), exercises: list })
   })
   return sections
 }
@@ -615,13 +629,13 @@ function selectionAfterRemove(routine, id) {
   return i < ids.length - 1 ? ids[i + 1] : ids[i - 1]
 }
 
-function routineProblem(routine) {
-  if (routine.exercises.length === 0) return "Add at least one exercise"
+function routineProblem(routine, t) {
+  if (routine.exercises.length === 0) return tr(t, "Add at least one exercise")
   var seen = {}
   for (var i = 0; i < routine.exercises.length; i++) {
     var name = String(routine.exercises[i].name).trim()
-    if (name === "") return "An exercise needs a name"
-    if (seen[name.toLowerCase()]) return "Two exercises are called " + name
+    if (name === "") return tr(t, "An exercise needs a name")
+    if (seen[name.toLowerCase()]) return tr(t, "Two exercises are called %1", [name])
     seen[name.toLowerCase()] = true
   }
   return ""
@@ -649,9 +663,9 @@ if (typeof module !== "undefined") {
                      GROUP_ORDER: GROUP_ORDER, EQUIPMENT_ORDER: EQUIPMENT_ORDER, cloneRoutine: cloneRoutine,
                      slug: slug, exerciseId: exerciseId, newExercise: newExercise, updateExercise: updateExercise,
                      toggleEquipment: toggleEquipment, removeExercise: removeExercise,
-                     exerciseUsage: exerciseUsage, deleteText: deleteText, finalizeIds: finalizeIds,
+                     exerciseUsage: exerciseUsage, listText: listText, deleteText: deleteText, finalizeIds: finalizeIds,
                      setFocus: setFocus, addToDay: addToDay, removeFromDay: removeFromDay, moveInDay: moveInDay,
-                     dayOptions: dayOptions, moveGroup: moveGroup, toggleGroup: toggleGroup,
+                     dayOptions: dayOptions, moveGroup: moveGroup, toggleGroup: toggleGroup, countText: countText,
                      rotationRows: rotationRows, catalogSections: catalogSections, catalogIds: catalogIds,
                      selectionAfterRemove: selectionAfterRemove, routineProblem: routineProblem,
                      sameRoutine: sameRoutine }

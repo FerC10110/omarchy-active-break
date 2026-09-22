@@ -1,0 +1,44 @@
+{
+  "exercises": [
+    { "id": "goblet-squat", "name": "Sentadilla goblet", "group": "legs", "equipment": ["kettlebell"], "sets": 3, "reps": "10", "cue": "Sostené la pesa contra el pecho, con los codos por dentro de las rodillas abajo." },
+    { "id": "back-squat", "name": "Sentadilla trasera", "group": "legs", "equipment": ["barbell", "rack"], "sets": 4, "reps": "6", "cue": "La barra sobre los trapecios, las rodillas siguiendo la línea de los pies." },
+    { "id": "front-squat", "name": "Sentadilla frontal", "group": "legs", "equipment": ["barbell", "rack"], "sets": 3, "reps": "6", "cue": "Los codos bien altos todo el movimiento, el torso derecho." },
+    { "id": "reverse-lunge", "name": "Zancada hacia atrás", "group": "legs", "equipment": ["dumbbells"], "sets": 3, "reps": "8/pierna", "cue": "Paso largo hacia atrás, la rodilla de atrás roza el piso." },
+    { "id": "bulgarian-split-squat", "name": "Sentadilla búlgara", "group": "legs", "equipment": ["dumbbells", "bench"], "sets": 3, "reps": "8/pierna", "cue": "El pie de atrás en el banco, bajá derecho sin empujarte con él." },
+    { "id": "step-up", "name": "Subida al banco", "group": "legs", "equipment": ["dumbbells", "bench"], "sets": 3, "reps": "8/pierna", "cue": "Empujá con el talón del pie de arriba y bajá controlando." },
+
+    { "id": "kettlebell-swing", "name": "Swing con pesa rusa", "group": "hinge", "equipment": ["kettlebell"], "sets": 4, "reps": "15", "cue": "La cadera lanza la pesa, los brazos solo la guían. Apretá los glúteos arriba." },
+    { "id": "deadlift", "name": "Peso muerto con barra", "group": "hinge", "equipment": ["barbell"], "sets": 4, "reps": "5", "cue": "La barra pegada a las piernas, la espalda neutra, empujá el piso." },
+    { "id": "dumbbell-rdl", "name": "Peso muerto rumano con mancuernas", "group": "hinge", "equipment": ["dumbbells"], "sets": 3, "reps": "10", "cue": "Llevá la cadera atrás con las rodillas blandas hasta sentir los isquios." },
+    { "id": "hip-thrust", "name": "Hip thrust con barra", "group": "hinge", "equipment": ["barbell", "bench"], "sets": 3, "reps": "10", "cue": "La espalda alta en el banco, el mentón hacia adentro, un segundo de pausa arriba." },
+    { "id": "single-leg-deadlift", "name": "Peso muerto a una pierna", "group": "hinge", "equipment": ["kettlebell"], "sets": 3, "reps": "8/pierna", "cue": "Mantené la cadera pareja; la pierna libre sube en línea con la espalda." },
+
+    { "id": "bench-press", "name": "Press de banca con barra", "group": "push", "equipment": ["barbell", "rack", "bench"], "sets": 4, "reps": "6", "cue": "Los omóplatos juntos, la barra al esternón. Si no tenés quien te asista, dejá una o dos repeticiones en el tanque." },
+    { "id": "incline-dumbbell-press", "name": "Press inclinado con mancuernas", "group": "push", "equipment": ["dumbbells", "bench"], "sets": 3, "reps": "10", "cue": "El banco a 30°, los codos a 45° del torso." },
+    { "id": "overhead-press", "name": "Press militar con barra", "group": "push", "equipment": ["barbell", "rack"], "sets": 4, "reps": "6", "cue": "Glúteos y abdomen firmes, sacá la cabeza del camino de la barra." },
+    { "id": "arnold-press", "name": "Press Arnold", "group": "push", "equipment": ["dumbbells"], "sets": 3, "reps": "10", "cue": "Girá las palmas mientras empujás, sin arquear la zona lumbar." },
+    { "id": "push-ups", "name": "Flexiones de brazos", "group": "push", "equipment": [], "sets": 3, "reps": "máx", "cue": "El cuerpo en una línea, el pecho casi al piso. Frená dos repeticiones antes del fallo." },
+    { "id": "bench-dips", "name": "Fondos en banco", "group": "push", "equipment": ["bench"], "sets": 3, "reps": "12", "cue": "Los hombros abajo y atrás, bajá hasta que los codos lleguen a 90°." },
+
+    { "id": "pull-ups", "name": "Dominadas", "group": "pull", "equipment": ["pullup_bar"], "sets": 4, "reps": "máx", "cue": "De brazos estirados a mentón sobre la barra, sin hamacarte." },
+    { "id": "barbell-row", "name": "Remo con barra", "group": "pull", "equipment": ["barbell"], "sets": 4, "reps": "8", "cue": "El torso a 45°, llevá la barra al ombligo." },
+    { "id": "one-arm-row", "name": "Remo a una mano con mancuerna", "group": "pull", "equipment": ["dumbbells", "bench"], "sets": 3, "reps": "10/brazo", "cue": "Rodilla y mano en el banco, llevá el codo hacia la cadera." },
+    { "id": "gorilla-row", "name": "Remo gorila", "group": "pull", "equipment": ["kettlebell"], "sets": 3, "reps": "10", "cue": "Dos pesas en el piso, bisagra de cadera, remá de a un lado por vez." },
+    { "id": "barbell-curl", "name": "Curl con barra", "group": "pull", "equipment": ["barbell"], "sets": 3, "reps": "10", "cue": "Los codos quietos al costado, sin impulso de cadera." },
+
+    { "id": "turkish-get-up", "name": "Turkish get-up", "group": "core", "equipment": ["kettlebell"], "sets": 3, "reps": "3/lado", "cue": "Lento y con la vista en la pesa; usá una liviana." },
+    { "id": "farmers-walk", "name": "Paseo del granjero", "group": "core", "equipment": ["dumbbells"], "sets": 3, "reps": "40 s", "cue": "Mancuernas pesadas, los hombros atrás, pasos cortos." },
+    { "id": "hanging-leg-raise", "name": "Elevación de piernas colgado", "group": "core", "equipment": ["pullup_bar"], "sets": 3, "reps": "10", "cue": "Subí las piernas sin hamacarte y bajalas en dos segundos." },
+    { "id": "plank", "name": "Plancha", "group": "core", "equipment": [], "sets": 3, "reps": "45 s", "cue": "Glúteos y abdomen firmes, no dejes caer la cadera." },
+    { "id": "thruster", "name": "Thruster con mancuernas", "group": "core", "equipment": ["dumbbells"], "sets": 3, "reps": "10", "cue": "Una sentadilla frontal que termina en press, en un solo movimiento." },
+    { "id": "clean-and-press", "name": "Clean & press con pesa rusa", "group": "core", "equipment": ["kettlebell"], "sets": 3, "reps": "6/lado", "cue": "Dejá que la pesa ruede sobre el antebrazo en vez de golpearte la muñeca." }
+  ],
+  "plan": {
+    "mon": { "focus": "Empuje", "exercises": ["bench-press", "incline-dumbbell-press", "overhead-press", "push-ups", "arnold-press", "bench-dips"] },
+    "tue": { "focus": "Piernas", "exercises": ["goblet-squat", "back-squat", "reverse-lunge", "bulgarian-split-squat", "front-squat", "step-up"] },
+    "wed": { "focus": "Tirón", "exercises": ["pull-ups", "barbell-row", "one-arm-row", "gorilla-row", "barbell-curl"] },
+    "thu": { "focus": "Bisagra y core", "exercises": ["kettlebell-swing", "deadlift", "plank", "dumbbell-rdl", "hip-thrust", "turkish-get-up", "single-leg-deadlift", "hanging-leg-raise"] },
+    "fri": { "focus": "Cuerpo completo", "exercises": ["thruster", "pull-ups", "kettlebell-swing", "incline-dumbbell-press", "goblet-squat", "clean-and-press", "farmers-walk"] }
+  },
+  "rotation": ["legs", "push", "hinge", "pull", "core"]
+}

@@ -1,7 +1,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Qt.labs.folderlistmodel
 import "BreakModel.js" as Model
+import "I18n.js" as I18n
 
 // Active Break service: the single instance that owns the clock. It ticks the
 // state machine in BreakModel.js once a second, sends the notifications, persists
@@ -17,9 +19,23 @@ Item {
   readonly property string pluginId: "io.github.ferc10110.active-break"
   readonly property string homeDir: Quickshell.env("HOME")
   readonly property string configDir: (Quickshell.env("XDG_CONFIG_HOME") || homeDir + "/.config") + "/active-break"
+  // Demo images for the exercises, named after their ids. The plugin ships
+  // none: whatever is in here is the user's, so nothing is downloaded, copied
+  // or deleted — the card just shows what it finds.
+  readonly property string mediaDir: configDir + "/media"
+
+  // Which exercises actually have an image. Asking the folder first keeps a
+  // card from pointing an AnimatedImage at a file that isn't there, which Qt
+  // reports as a warning in the shell log — one per exercise without an
+  // image, and one for every exercise when nobody has any.
+  property var mediaIds: ({})
+  function hasMedia(id) { return id !== undefined && mediaIds[id] === true }
   readonly property string stateDir: (Quickshell.env("XDG_STATE_HOME") || homeDir + "/.local/state") + "/active-break"
   readonly property string soundFile: "/usr/share/sounds/freedesktop/stereo/complete.oga"
   readonly property string dueTitle: "Time to move"
+  readonly property string omarchyConfigDir: (Quickshell.env("XDG_CONFIG_HOME") || homeDir + "/.config") + "/omarchy"
+  // Shared by every plugin of mine, so changing it in one changes them all.
+  property string language: "en"
 
   // Not `state`: Item already has one (QML states).
   property var session: Model.initialState()
@@ -37,14 +53,15 @@ Item {
 
   property real savedTickAt: 0
   property int dueNotificationId: 0
+  property string dueTitleSent: ""
   property bool editorOpen: false
 
   // ---- what the widget and panel read
   readonly property var exercise: Model.findExercise(routine, session.exerciseId)
-  readonly property var face: ready ? Model.barFace(session, routine, now)
-                                    : ({ text: "", tone: "dim", tooltip: "Active Break · loading" })
-  readonly property string modeText: Model.modeText(config, routine, new Date(now))
-  readonly property string scheduleText: Model.scheduleText(config.schedule)
+  readonly property var face: ready ? Model.barFace(session, routine, now, service.t)
+                                    : ({ text: "", tone: "dim", tooltip: t("Active Break · loading") })
+  readonly property string modeText: Model.modeText(config, routine, new Date(now), service.t)
+  readonly property string scheduleText: Model.scheduleText(config.schedule, service.t)
   readonly property string problem: configError !== "" ? configError : routineError
 
   function pluginPath(relative) {
@@ -85,10 +102,14 @@ Item {
         !== JSON.stringify(Object.assign({}, b, { lastTickAt: 0 }))
   }
 
-  // The toast id rides along so a reload can still replace or close it.
+  // The toast id rides along so a reload can still replace or close it. The
+  // title rides along too: closeDueNotification() dismisses by matching the
+  // title it was sent with, so a service recreated by a shell restart (or a
+  // language change) must not forget which title is actually on screen.
   function saveSession() {
     savedTickAt = session.lastTickAt
-    sessionFile.setText(JSON.stringify(Object.assign({}, session, { notificationId: dueNotificationId }),
+    sessionFile.setText(JSON.stringify(Object.assign({}, session,
+                                       { notificationId: dueNotificationId, dueTitle: dueTitleSent }),
                                        null, 2) + "\n")
   }
 
@@ -105,13 +126,16 @@ Item {
   function notify(kind) {
     var ex = Model.findExercise(routine, session.exerciseId)
     if (kind === "due") {
-      var body = ex ? ex.name + " · " + Model.prescription(ex) + " · " + Model.equipmentText(ex)
-                    : "Get up and move for a bit"
+      var body = ex ? ex.name + " · " + Model.prescription(ex, t) + " · " + Model.equipmentText(ex, t)
+                    : t("Get up and move for a bit")
+      // The title is saved because closeDueNotification() dismisses by
+      // matching it, and the language could change while the toast is open.
+      dueTitleSent = t("Time to move")
       // Critical, so the toast stays up until acted on; -p prints its id so the
       // next reminder replaces it instead of stacking, and act() can close it.
       var argv = ["omarchy-notification-send", "-g", "\u{F1300}", "-u", "critical"]
       if (dueNotificationId > 0) argv = argv.concat(["-r", String(dueNotificationId)])
-      argv = argv.concat([dueTitle, body, "--exec", "omarchy-shell", "shell", "summon", pluginId])
+      argv = argv.concat([dueTitleSent, body, "--exec", "omarchy-shell", "shell", "summon", pluginId])
       if (notifyProc.running) {
         Quickshell.execDetached(argv)
       } else {
@@ -120,10 +144,11 @@ Item {
       }
     } else if (kind === "breakEnd") {
       var next = session.phase === "working"
-        ? "Next break " + Model.clock(new Date(session.dueAt)) + (ex ? " · " + ex.name : "")
-        : "Work hours are over for today"
+        ? (ex ? t("Next break %1 · %2", [Model.clock(new Date(session.dueAt)), ex.name])
+              : t("Next break %1", [Model.clock(new Date(session.dueAt))]))
+        : t("Work hours are over for today")
       Quickshell.execDetached(["omarchy-notification-send", "-g", "\u{F012C}", "-u", "normal",
-                               "Break over", "Back to work. " + next])
+                               t("Break over"), t("Back to work. %1", [next])])
     }
     if (config.sound) Quickshell.execDetached(["pw-play", soundFile])
   }
@@ -131,7 +156,8 @@ Item {
   // Omarchy's notification service ignores the D-Bus CloseNotification call
   // for popups, so dismiss through its own IPC, which matches on the title.
   function closeDueNotification() {
-    Quickshell.execDetached(["omarchy-shell", "notifications", "dismiss", dueTitle])
+    Quickshell.execDetached(["omarchy-shell", "notifications", "dismiss",
+                             dueTitleSent !== "" ? dueTitleSent : dueTitle])
     dueNotificationId = 0
   }
 
@@ -152,16 +178,19 @@ Item {
   // ---- files
 
   // First run: create both directories and copy the bundled config and
-  // routine. Never overwrites an existing file.
+  // routine. Never overwrites an existing file. The routine is copied in the
+  // language in force at that moment: its exercise names and cues are content
+  // we wrote, not the user's, so a Spanish desktop should not start in English.
   Process {
     id: seedProc
     command: ["sh", "-c",
               "mkdir -p \"$1\" \"$2\" && "
               + "{ [ -e \"$1/config.json\" ] || cp \"$3/config.json\" \"$1/config.json\"; } && "
-              + "{ [ -e \"$1/routine.json\" ] || cp \"$3/routine.json\" \"$1/routine.json\"; }",
-              "sh", service.configDir, service.stateDir, service.pluginPath("defaults")]
+              + "{ [ -e \"$1/routine.json\" ] || cp \"$3/$4\" \"$1/routine.json\"; }",
+              "sh", service.configDir, service.stateDir, service.pluginPath("defaults"),
+              service.language === "es" ? "routine.es.json" : "routine.json"]
     onExited: function(exitCode) {
-      if (exitCode !== 0) service.configError = "Could not create " + service.configDir
+      if (exitCode !== 0) service.configError = service.t("Could not create %1", [service.configDir])
       service.seeded = true
       // A FileView whose file didn't exist at load time never fires again.
       if (!service.configLoaded) configFile.reload()
@@ -176,7 +205,7 @@ Item {
   function loadConfig(text) {
     var parsed = parseJson(text)
     if (parsed.error) {
-      configError = "config.json is not valid JSON: " + parsed.error
+      configError = t("config.json is not valid JSON: %1", [parsed.error])
     } else {
       configError = ""
       config = Model.normalizeConfig(parsed.value)
@@ -188,8 +217,8 @@ Item {
     var parsed = parseJson(text)
     var candidate = parsed.error ? null : Model.normalizeRoutine(parsed.value)
     if (!candidate || candidate.exercises.length === 0) {
-      routineError = parsed.error ? "routine.json is not valid JSON: " + parsed.error
-                                  : "routine.json has no valid exercises"
+      routineError = parsed.error ? t("routine.json is not valid JSON: %1", [parsed.error])
+                                  : t("routine.json has no valid exercises")
       // Keep the last good routine; on a broken first load use the bundled one.
       if (!routineLoaded) routine = Model.normalizeRoutine(parseJson(bundledRoutine.text()).value)
     } else {
@@ -219,8 +248,16 @@ Item {
     return true
   }
 
+  // The bundled routine ships in both languages — same ids, groups, equipment,
+  // sets and weekly plan, translated names, cues and reps — so Restore defaults
+  // hands back the one that matches the language. The user's own routine is
+  // never swapped behind their back: this only runs when they ask for it, or on
+  // a first run when there is no routine yet. English is the fallback if the
+  // Spanish file is missing or unreadable.
   function defaultRoutine() {
-    return Model.normalizeRoutine(parseJson(bundledRoutine.text()).value)
+    var raw = language === "es" ? parseJson(bundledRoutineEs.text()).value : null
+    if (!raw) raw = parseJson(bundledRoutine.text()).value
+    return Model.normalizeRoutine(raw)
   }
 
   function openEditor() {
@@ -249,6 +286,9 @@ Item {
       var raw = service.parseJson(text()).value
       service.session = Model.normalizeState(raw)
       service.dueNotificationId = raw && raw.notificationId > 0 ? raw.notificationId : 0
+      // Falls back to "" (and from there to the English dueTitle on dismiss)
+      // for session files written before this field existed.
+      service.dueTitleSent = raw && typeof raw.dueTitle === "string" ? raw.dueTitle : ""
       service.savedTickAt = service.session.lastTickAt || 0
       service.sessionLoaded = true
     }
@@ -265,7 +305,7 @@ Item {
     onLoaded: service.loadConfig(text())
     onLoadFailed: {
       if (!service.seeded) return   // seedProc reloads once the file exists
-      service.configError = "Could not read " + path
+      service.configError = service.t("Could not read %1", [path])
       service.configLoaded = true
     }
   }
@@ -291,6 +331,53 @@ Item {
     printErrors: false
   }
 
+  FolderListModel {
+    id: mediaFolder
+    folder: "file://" + service.mediaDir
+    nameFilters: ["*.gif"]
+    showDirs: false
+    onCountChanged: {
+      var ids = {}
+      for (var i = 0; i < count; i++) {
+        var name = String(get(i, "fileName"))
+        ids[name.slice(0, -4)] = true      // drop ".gif"
+      }
+      service.mediaIds = ids
+    }
+  }
+
+  FileView {
+    id: bundledRoutineEs
+    path: service.pluginPath("defaults/routine.es.json")
+    blockLoading: true
+    printErrors: false
+  }
+
+  FileView {
+    id: languageFile
+    path: service.omarchyConfigDir + "/plugin-language.json"
+    // Loaded synchronously: the first run copies the routine in this language,
+    // and that happens before an async load would have answered.
+    blockLoading: true
+    watchChanges: true
+    atomicWrites: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var raw = service.parseJson(text()).value
+      var lang = raw && raw.language ? String(raw.language) : "en"
+      service.language = (lang === "es") ? "es" : "en"
+    }
+    onLoadFailed: service.language = "en"   // no file yet, or unreadable: English
+  }
+
+  function t(s, args) { return I18n.t(s, service.language, args) }
+
+  function setLanguage(lang) {
+    service.language = (lang === "es") ? "es" : "en"
+    languageFile.setText(JSON.stringify({ language: service.language }, null, 2) + "\n")
+  }
+
   Component.onCompleted: seedProc.running = true
 
   // ---- IPC: omarchy-shell io.github.ferc10110.active-break <function>
@@ -301,7 +388,7 @@ Item {
     function status(): string {
       var ex = service.exercise
       return JSON.stringify({ phase: service.session.phase, bar: service.face.text, tooltip: service.face.tooltip,
-                              exercise: ex ? ex.name : null, prescription: ex ? Model.prescription(ex) : null,
+                              exercise: ex ? ex.name : null, prescription: ex ? Model.prescription(ex, service.t) : null,
                               dueAt: service.session.dueAt, breakEndsAt: service.session.breakEndsAt,
                               mode: service.modeText, schedule: service.scheduleText,
                               editorOpen: service.editorOpen,

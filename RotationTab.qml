@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "BreakModel.js" as Model
+import "I18n.js" as I18n
 
 // Rotation tab of the routine editor: the order rotation mode walks the
 // muscle groups in, one exercise per break. Groups left out sit below, dimmed.
@@ -11,7 +12,7 @@ Item {
 
   property var host: null
   readonly property var draft: host ? host.draft : null
-  readonly property var rows: draft ? Model.rotationRows(draft) : []
+  readonly property var rows: draft ? Model.rotationRows(draft, view.t) : []
   readonly property int included: draft ? draft.rotation.length : 0
   readonly property bool typing: false
   readonly property color foreground: host ? host.foreground : Color.foreground
@@ -19,6 +20,8 @@ Item {
   readonly property color urgent: host ? host.urgent : Color.urgent
   readonly property color dim: host ? host.dim : Qt.darker(Color.foreground, 1.55)
   readonly property string fontFamily: host ? host.fontFamily : Style.font.family
+
+  function t(s, args) { return host ? host.t(s, args) : I18n.t(s, "en", args) }
 
   function move(from, to) { host.edit(function(r) { return Model.moveGroup(r, from, to) }) }
   function toggle(group) { host.edit(function(r) { return Model.toggleGroup(r, group) }) }
@@ -29,7 +32,7 @@ Item {
 
     Text {
       Layout.fillWidth: true
-      text: "In rotation mode each break takes the next group in this list and picks one of its exercises."
+      text: view.t("In rotation mode each break takes the next group in this list and picks one of its exercises.")
       textFormat: Text.PlainText
       wrapMode: Text.Wrap
       color: view.dim
@@ -39,7 +42,7 @@ Item {
     Text {
       Layout.fillWidth: true
       visible: view.draft !== null && view.included === 0
-      text: "Rotation is empty: exercises are picked at random."
+      text: view.t("Rotation is empty: exercises are picked at random.")
       textFormat: Text.PlainText
       wrapMode: Text.Wrap
       color: view.urgent
@@ -75,7 +78,7 @@ Item {
         }
         Button {
           text: "↑"
-          tooltipText: "Earlier"
+          tooltipText: view.t("Earlier")
           bordered: true
           enabled: modelData.included && index > 0
           opacity: enabled ? 1 : 0.35
@@ -86,7 +89,7 @@ Item {
         }
         Button {
           text: "↓"
-          tooltipText: "Later"
+          tooltipText: view.t("Later")
           bordered: true
           enabled: modelData.included && index < view.included - 1
           opacity: enabled ? 1 : 0.35

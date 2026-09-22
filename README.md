@@ -99,6 +99,11 @@ The cog in the panel sets:
 - the days and hours
 - the chime
 
+The first row picks the language: **English** or **Español**. It is not part of
+this plugin's settings — it is written to `~/.config/omarchy/plugin-language.json`
+and shared by every plugin that reads it, so changing it here changes them all.
+Without that file, everything is in English.
+
 They're saved to `~/.config/active-break/config.json`, which you can also edit by hand.
 
 ## Routine
@@ -106,6 +111,15 @@ They're saved to `~/.config/active-break/config.json`, which you can also edit b
 The routine is the catalog of exercises, each day's plan and the rotation
 order. It starts with 28 exercises for dumbbells, kettlebells, an Olympic
 barbell with a rack, a bench and a pull-up bar.
+
+Exercise names and technique cues are your data: they stay exactly as you
+wrote them, in whatever language, no matter what the language setting is.
+Only the interface around them gets translated.
+
+The routine you start with is mine, though, so it ships in both languages.
+Whichever one is set when the plugin first runs is the one you get, and
+**Restore defaults** in the editor brings back the routine in the language set
+at that moment. Switching language never rewrites a routine you already have.
 
 To change it, click **Edit routine** in Settings (the cog in the panel), or run
 `omarchy-shell io.github.ferc10110.active-break editRoutine`. The editor opens in the
@@ -120,7 +134,22 @@ middle of the screen with three tabs:
 
 Nothing is written until you click **Save** (or press Ctrl+S). Cancel or Esc
 asks before throwing changes away. **Restore defaults** brings back the
-original routine, and it still needs a Save.
+original routine — in the language you are using — and it still needs a Save.
+
+### Demo images
+
+The panel can show a small looping image of the exercise, above its name. The
+plugin ships none: put your own in `~/.config/active-break/media/`, one file
+per exercise, named after its id — `back-squat.gif`, `push-ups.gif`. GIFs of
+about 180×180 fit the panel without scaling. An exercise with no file just has
+no image, and the card closes up around it.
+
+To find an exercise's id, open `routine.json`: it is the `id` field. New files
+are picked up while the shell is running.
+
+Settings links to one collection of exercise animations. Whatever you use, the
+images belong to whoever made them: ask before you use them, and download them
+yourself — this plugin never fetches or bundles any.
 
 ### The file
 
@@ -157,8 +186,11 @@ To start over, use **Restore defaults** in the editor.
 
 - `~/.config/active-break/config.json`: the settings.
 - `~/.config/active-break/routine.json`: the exercises and the plan.
+- `~/.config/active-break/media/`: your demo images, if you want them.
 - `~/.local/state/active-break/state.json`: the clock (phase and times). Delete it to
   start a fresh cycle.
+- `~/.config/omarchy/plugin-language.json`: the language, shared with my other
+  plugins. Delete it to go back to English.
 
 ## Remove
 

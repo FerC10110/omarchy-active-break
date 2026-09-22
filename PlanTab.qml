@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "BreakModel.js" as Model
+import "I18n.js" as I18n
 
 // Weekly plan tab of the routine editor: pick a day, name its focus and list
 // the exercises weekly mode walks through, in order. Days outside work hours
@@ -20,6 +21,8 @@ Item {
   readonly property color accent: host ? host.accent : Color.accent
   readonly property color dim: host ? host.dim : Qt.darker(Color.foreground, 1.55)
   readonly property string fontFamily: host ? host.fontFamily : Style.font.family
+
+  function t(s, args) { return host ? host.t(s, args) : I18n.t(s, "en", args) }
 
   readonly property var dayChips: [
     { key: "mon", label: "Mon" }, { key: "tue", label: "Tue" }, { key: "wed", label: "Wed" },
@@ -69,11 +72,11 @@ Item {
         delegate: Button {
           required property var modelData
           readonly property bool working: view.workDays.indexOf(modelData.key) !== -1
-          text: modelData.label
+          text: view.t(modelData.label)
           bordered: true
           selected: view.day === modelData.key
           opacity: working ? 1 : 0.55
-          tooltipText: working ? "" : "Outside your work hours"
+          tooltipText: working ? "" : view.t("Outside your work hours")
           foreground: view.foreground
           accent: view.accent
           fontFamily: view.fontFamily
@@ -84,14 +87,14 @@ Item {
     }
 
     PanelSectionHeader {
-      text: "Focus"
+      text: view.t("Focus")
       foreground: view.foreground
       fontFamily: view.fontFamily
     }
     TextField {
       id: focusField
       Layout.preferredWidth: Style.space(320)
-      placeholderText: "e.g. Push"
+      placeholderText: view.t("e.g. Push")
       maximumLength: 40
       foreground: view.foreground
       font.family: view.fontFamily
@@ -104,13 +107,13 @@ Item {
     }
 
     PanelSectionHeader {
-      text: "Exercises, in order"
+      text: view.t("Exercises, in order")
       foreground: view.foreground
       fontFamily: view.fontFamily
     }
     Text {
       visible: view.entry.exercises.length === 0
-      text: "No plan: any exercise from the catalog."
+      text: view.t("No plan: any exercise from the catalog.")
       textFormat: Text.PlainText
       color: view.dim
       font.family: view.fontFamily
@@ -142,7 +145,7 @@ Item {
 
             Text {
               Layout.fillWidth: true
-              text: (index + 1) + ". " + (exercise && exercise.name !== "" ? exercise.name : "New exercise")
+              text: (index + 1) + ". " + (exercise && exercise.name !== "" ? exercise.name : view.t("New exercise"))
               textFormat: Text.PlainText
               elide: Text.ElideRight
               color: view.foreground
@@ -150,7 +153,7 @@ Item {
               font.pixelSize: Style.font.body
             }
             Text {
-              text: exercise ? Model.groupText(exercise) : ""
+              text: exercise ? Model.groupText(exercise, view.t) : ""
               textFormat: Text.PlainText
               color: view.dim
               font.family: view.fontFamily
@@ -158,7 +161,7 @@ Item {
             }
             Button {
               text: "↑"
-              tooltipText: "Earlier"
+              tooltipText: view.t("Earlier")
               bordered: true
               enabled: index > 0
               opacity: enabled ? 1 : 0.35
@@ -169,7 +172,7 @@ Item {
             }
             Button {
               text: "↓"
-              tooltipText: "Later"
+              tooltipText: view.t("Later")
               bordered: true
               enabled: index < view.entry.exercises.length - 1
               opacity: enabled ? 1 : 0.35
@@ -180,7 +183,7 @@ Item {
             }
             Button {
               text: "×"
-              tooltipText: "Remove from this day"
+              tooltipText: view.t("Remove from this day")
               bordered: true
               foreground: view.foreground
               fontFamily: view.fontFamily
@@ -197,10 +200,10 @@ Item {
       Layout.preferredWidth: Style.space(320)
       showLabel: false
       value: ""
-      options: view.draft ? Model.dayOptions(view.draft, view.day) : []
-      triggerLabel: "Add exercise…"
-      placeholderText: "Search exercises"
-      emptyText: "Every exercise is already in this day"
+      options: view.draft ? Model.dayOptions(view.draft, view.day, view.t) : []
+      triggerLabel: view.t("Add exercise…")
+      placeholderText: view.t("Search exercises")
+      emptyText: view.t("Every exercise is already in this day")
       foreground: view.foreground
       accent: view.accent
       fontFamily: view.fontFamily

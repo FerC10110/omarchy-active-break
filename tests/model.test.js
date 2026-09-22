@@ -4,6 +4,8 @@
 const test = require("node:test")
 const assert = require("node:assert/strict")
 const M = require("../BreakModel.js")
+const I18n = require("../I18n.js")
+const es = (s, args) => I18n.t(s, "es", args)   // el traductor atado al español
 
 const MIN = 60000
 const first = () => 0                     // rng that always takes the first candidate
@@ -636,4 +638,48 @@ test("a pause from yesterday with a deleted exercise starts today's plan at the 
   const { state } = M.step(s, config, M.removeExercise(routine, "row"), at(22, 10), first)
   assert.equal(state.phase, "working")
   assert.equal(state.exerciseId, "goblet")    // Tuesday's first entry
+})
+
+// ---- i18n: the model builds its texts through a translator
+
+test("the texts of the model come out in Spanish with a Spanish translator", () => {
+  const ex = M.findExercise(routine, "press")
+  assert.equal(M.groupText(ex, es), "Empuje")
+  assert.equal(M.equipmentText({ equipment: [] }, es), "Peso corporal")
+  assert.equal(M.equipmentText({ equipment: ["kettlebell", "bench"] }, es), "Pesa rusa · Banco")
+  assert.equal(M.countText(1, es), "1 ejercicio")
+  assert.equal(M.countText(6, es), "6 ejercicios")
+  assert.equal(M.listText(["Lunes", "Viernes"], es), "Lunes y Viernes")
+})
+
+test("the same texts stay in English without a translator", () => {
+  const ex = M.findExercise(routine, "press")
+  assert.equal(M.groupText(ex), "Push")
+  assert.equal(M.countText(6), "6 exercises")
+  assert.equal(M.listText(["Monday", "Friday"]), "Monday and Friday")
+})
+
+test("the bar face is translated", () => {
+  const s = Object.assign(M.initialState(), { phase: "due", exerciseId: "press", workMin: 30, breakMin: 10 })
+  assert.equal(M.barFace(s, routine, MON_10, es).text, "¡Dale!")
+  assert.match(M.barFace(s, routine, MON_10, es).tooltip, /^¡Hora de moverte!/)
+  assert.equal(M.barFace(s, routine, MON_10).text, "Go!")
+})
+
+test("the mode and schedule lines are translated", () => {
+  assert.match(M.modeText(config, routine, new Date(MON_10), es), /^Plan semanal · Lunes:/)
+  assert.equal(M.scheduleText(config.schedule, es), "Lun Mar Mié Jue Vie · 09:00–18:00")
+})
+
+test("the delete question names the days in Spanish", () => {
+  const text = M.deleteText(routine, "press", es)
+  assert.match(text, /^¿Borrar /)
+  assert.match(text, /Está en (el plan|los planes) de /)
+})
+
+test("the routine problems are translated", () => {
+  assert.equal(M.routineProblem({ exercises: [], plan: {}, rotation: [] }, es),
+               "Agregá al menos un ejercicio")
+  assert.equal(M.routineProblem({ exercises: [], plan: {}, rotation: [] }),
+               "Add at least one exercise")
 })

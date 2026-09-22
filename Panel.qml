@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
+import "I18n.js" as I18n
 
 // Active Break panel: a face over Service.qml. It holds no clock of its own;
 // the views read `host.service` (session, exercise, config) and send actions
@@ -27,6 +28,8 @@ Panel {
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+  readonly property string language: service ? service.language : "en"
+  function t(s, args) { return I18n.t(s, language, args) }
 
   readonly property string viewSource: view === "settings" ? "SettingsView.qml" : "MainView.qml"
 
@@ -83,7 +86,7 @@ Panel {
           trailingControl: Component {
             PanelActionButton {
               iconText: activeBreak.view === "settings" ? "\u{F004D}" : "\u{F0493}"   // nf-md-arrow_left / nf-md-cog
-              tooltipText: activeBreak.view === "settings" ? "Back without saving" : "Settings"
+              tooltipText: activeBreak.view === "settings" ? activeBreak.t("Back without saving") : activeBreak.t("Settings")
               foreground: activeBreak.foreground
               hoverColor: activeBreak.accent
               onClicked: activeBreak.view === "settings" ? activeBreak.back() : activeBreak.openSettings()
@@ -105,7 +108,7 @@ Panel {
         Text {
           Layout.fillWidth: true
           visible: activeBreak.service === null
-          text: "The Active Break service has not started yet."
+          text: activeBreak.t("The Active Break service has not started yet.")
           textFormat: Text.PlainText
           wrapMode: Text.Wrap
           color: activeBreak.dim

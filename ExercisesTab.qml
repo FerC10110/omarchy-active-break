@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "BreakModel.js" as Model
+import "I18n.js" as I18n
 
 // Exercises tab of the routine editor: the catalog on the left, grouped by
 // muscle group, and the selected exercise's form on the right. Every change
@@ -14,13 +15,15 @@ Item {
   property string query: ""
   readonly property var draft: host ? host.draft : null
   readonly property var exercise: draft && host ? Model.findExercise(draft, host.selectedId) : null
-  readonly property var sections: draft ? Model.catalogSections(draft, query) : []
+  readonly property var sections: draft ? Model.catalogSections(draft, query, view.t) : []
   readonly property bool typing: searchField.activeFocus || nameField.activeFocus || repsField.activeFocus
                                  || cueField.activeFocus || setsField.field.activeFocus
   readonly property color foreground: host ? host.foreground : Color.foreground
   readonly property color accent: host ? host.accent : Color.accent
   readonly property color dim: host ? host.dim : Qt.darker(Color.foreground, 1.55)
   readonly property string fontFamily: host ? host.fontFamily : Style.font.family
+
+  function t(s, args) { return host ? host.t(s, args) : I18n.t(s, "en", args) }
 
   // Fields with their own Keys.onEscapePressed handle Escape themselves;
   // this catches it from anything else that gets focus (the Sets spinner
@@ -66,7 +69,7 @@ Item {
       TextField {
         id: searchField
         Layout.fillWidth: true
-        placeholderText: "Search exercises"
+        placeholderText: view.t("Search exercises")
         foreground: view.foreground
         font.family: view.fontFamily
         onTextEdited: view.query = text
@@ -90,7 +93,7 @@ Item {
           Text {
             visible: view.sections.length === 0
             width: listColumn.width
-            text: "No exercises match."
+            text: view.t("No exercises match.")
             textFormat: Text.PlainText
             color: view.dim
             font.family: view.fontFamily
@@ -127,7 +130,7 @@ Item {
                     anchors.right: presc.left
                     anchors.rightMargin: Style.space(8)
                     anchors.verticalCenter: parent.verticalCenter
-                    text: modelData.name !== "" ? modelData.name : "New exercise"
+                    text: modelData.name !== "" ? modelData.name : view.t("New exercise")
                     textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: modelData.name !== "" ? view.foreground : view.dim
@@ -139,7 +142,7 @@ Item {
                     anchors.right: parent.right
                     anchors.rightMargin: Style.space(8)
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Model.prescription(modelData)
+                    text: Model.prescription(modelData, view.t)
                     textFormat: Text.PlainText
                     color: view.dim
                     font.family: view.fontFamily
@@ -161,7 +164,7 @@ Item {
 
       Button {
         Layout.fillWidth: true
-        text: "+ New exercise"
+        text: view.t("+ New exercise")
         bordered: true
         foreground: view.foreground
         accent: view.accent
@@ -183,7 +186,7 @@ Item {
       Text {
         visible: view.exercise === null
         anchors.centerIn: parent
-        text: "Pick an exercise or add a new one."
+        text: view.t("Pick an exercise or add a new one.")
         textFormat: Text.PlainText
         color: view.dim
         font.family: view.fontFamily
@@ -206,14 +209,14 @@ Item {
           spacing: Style.space(8)
 
           PanelSectionHeader {
-            text: "Name"
+            text: view.t("Name")
             foreground: view.foreground
             fontFamily: view.fontFamily
           }
           TextField {
             id: nameField
             width: form.width
-            placeholderText: "e.g. Goblet squat"
+            placeholderText: view.t("e.g. Goblet squat")
             maximumLength: 60
             foreground: view.foreground
             font.family: view.fontFamily
@@ -222,12 +225,12 @@ Item {
           }
 
           PanelSectionHeader {
-            text: "Group"
+            text: view.t("Group")
             foreground: view.foreground
             fontFamily: view.fontFamily
           }
           ButtonGroup {
-            options: Model.GROUP_ORDER.map(function(g) { return { value: g, label: Model.GROUP_NAMES[g] } })
+            options: Model.GROUP_ORDER.map(function(g) { return { value: g, label: view.t(Model.GROUP_NAMES[g]) } })
             value: view.exercise ? view.exercise.group : ""
             foreground: view.foreground
             accent: view.accent
@@ -237,7 +240,7 @@ Item {
           }
 
           PanelSectionHeader {
-            text: "Equipment"
+            text: view.t("Equipment")
             foreground: view.foreground
             fontFamily: view.fontFamily
           }
@@ -248,7 +251,7 @@ Item {
               model: Model.EQUIPMENT_ORDER
               delegate: Button {
                 required property var modelData
-                text: Model.EQUIPMENT_NAMES[modelData]
+                text: view.t(Model.EQUIPMENT_NAMES[modelData])
                 bordered: true
                 selected: view.exercise !== null && view.exercise.equipment.indexOf(modelData) !== -1
                 foreground: view.foreground
@@ -265,7 +268,7 @@ Item {
           }
           Text {
             visible: view.exercise !== null && view.exercise.equipment.length === 0
-            text: "No equipment: bodyweight"
+            text: view.t("No equipment: bodyweight")
             textFormat: Text.PlainText
             color: view.dim
             font.family: view.fontFamily
@@ -277,7 +280,7 @@ Item {
 
             NumberField {
               id: setsField
-              label: "Sets"
+              label: view.t("Sets")
               value: view.exercise ? view.exercise.sets : 3
               from: 1
               to: 10
@@ -289,7 +292,7 @@ Item {
             Column {
               spacing: Style.spacing.md
               Text {
-                text: "Reps"
+                text: view.t("Reps")
                 textFormat: Text.PlainText
                 color: Qt.darker(view.foreground, 1.4)
                 font.family: view.fontFamily
@@ -298,7 +301,7 @@ Item {
               TextField {
                 id: repsField
                 width: Style.space(200)
-                placeholderText: "10, 8/leg, max, 40 s"
+                placeholderText: view.t("10, 8/leg, max, 40 s")
                 maximumLength: 20
                 foreground: view.foreground
                 font.family: view.fontFamily
@@ -309,14 +312,14 @@ Item {
           }
 
           PanelSectionHeader {
-            text: "Technique cue"
+            text: view.t("Technique cue")
             foreground: view.foreground
             fontFamily: view.fontFamily
           }
           TextField {
             id: cueField
             width: form.width
-            placeholderText: "One line to keep in mind while you lift"
+            placeholderText: view.t("One line to keep in mind while you lift")
             maximumLength: 160
             foreground: view.foreground
             font.family: view.fontFamily
@@ -327,7 +330,7 @@ Item {
           Item { width: 1; height: Style.space(6) }
 
           Button {
-            text: "Delete exercise"
+            text: view.t("Delete exercise")
             bordered: true
             enabled: view.draft !== null && view.draft.exercises.length > 1
             opacity: enabled ? 1 : 0.4

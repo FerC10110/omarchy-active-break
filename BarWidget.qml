@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "I18n.js" as I18n
 
 // Bar entry point for Active Break: an icon plus the time left. The clock lives
 // in Service.qml (one instance); this widget exists once per monitor and only
@@ -19,7 +20,9 @@ BarWidget {
   readonly property bool popoutSwitchClosing: panel ? panel.popoutSwitchClosing === true : false
 
   readonly property string phase: service && service.ready ? service.session.phase : "off"
-  readonly property var face: service ? service.face : ({ text: "", tone: "dim", tooltip: "Active Break · loading" })
+  readonly property string language: service ? service.language : "en"
+  function t(s, args) { return I18n.t(s, root.language, args) }
+  readonly property var face: service ? service.face : ({ text: "", tone: "dim", tooltip: root.t("Active Break · loading") })
   readonly property string icon: phase === "paused" ? "\u{F03E4}"        // nf-md-pause
                                 : phase === "due" ? "\u{F115D}"          // nf-md-weight_lifter
                                 : "\u{F1300}"                            // nf-md-kettlebell

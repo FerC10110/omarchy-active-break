@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "BreakModel.js" as Model
+import "I18n.js" as I18n
 
 // The routine editor: a card in the middle of the focused screen over a
 // dimmed background, like Omarchy's menus and Readily's centered card.
@@ -23,17 +24,20 @@ Item {
   property string selectedDay: Model.dayKey(new Date())    // Weekly plan tab
   property string confirmKind: ""                         // delete | restore | discard
 
-  readonly property var tabs: [{ value: "exercises", label: "Exercises" }, { value: "plan", label: "Weekly plan" },
-                               { value: "rotation", label: "Rotation" }]
+  readonly property var tabs: [{ value: "exercises", label: editor.t("Exercises") }, { value: "plan", label: editor.t("Weekly plan") },
+                               { value: "rotation", label: editor.t("Rotation") }]
   readonly property var tabFiles: ({ exercises: "ExercisesTab.qml", plan: "PlanTab.qml", rotation: "RotationTab.qml" })
   readonly property bool dirty: draft !== null && service !== null && !Model.sameRoutine(draft, service.routine)
-  readonly property string problem: draft !== null ? Model.routineProblem(draft) : ""
+  readonly property string problem: draft !== null ? Model.routineProblem(draft, editor.t) : ""
 
   readonly property color foreground: Color.foreground
   readonly property color accent: Color.accent
   readonly property color urgent: Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: Style.font.family
+
+  readonly property string language: service ? service.language : "en"
+  function t(s, args) { return I18n.t(s, editor.language, args) }
 
   // The draft was replaced or the selection moved: tabs refill their text
   // fields (they aren't bound, so typing never fights the draft).
@@ -97,21 +101,10 @@ Item {
 
   // ---- confirmations
 
+  // The dialog's texts are bindings on confirmKind in the ConfirmDialog below
+  // (not set here) so a language change while it's open still reaches them.
   function ask(kind) {
     confirmKind = kind
-    if (kind === "delete") {
-      confirm.message = Model.deleteText(draft, selectedId)
-      confirm.cancelText = "Cancel"
-      confirm.confirmText = "Delete"
-    } else if (kind === "restore") {
-      confirm.message = "Replace your routine with the original one? You can still cancel before saving."
-      confirm.cancelText = "Cancel"
-      confirm.confirmText = "Replace"
-    } else {
-      confirm.message = "Discard your changes to the routine?"
-      confirm.cancelText = "Keep editing"
-      confirm.confirmText = "Discard"
-    }
     confirm.selectedIndex = 0
     confirm.opened = true
     keyCatcher.forceActiveFocus()
@@ -227,7 +220,7 @@ Item {
               spacing: Style.space(12)
 
               Text {
-                text: "Routine"
+                text: editor.t("Routine")
                 textFormat: Text.PlainText
                 color: editor.foreground
                 font.family: editor.fontFamily
@@ -249,7 +242,7 @@ Item {
               }
               Item { Layout.fillWidth: true }
               Button {
-                text: "Restore defaults"
+                text: editor.t("Restore defaults")
                 bordered: true
                 foreground: editor.foreground
                 accent: editor.accent
@@ -276,8 +269,8 @@ Item {
                 Layout.fillWidth: true
                 text: editor.problem !== "" ? editor.problem
                       : (editor.service !== null && editor.service.routineError !== ""
-                         ? "routine.json has an error; Save replaces it with this routine"
-                         : (editor.dirty ? "Unsaved changes" : ""))
+                         ? editor.t("routine.json has an error; Save replaces it with this routine")
+                         : (editor.dirty ? editor.t("Unsaved changes") : ""))
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
                 color: editor.problem !== "" || (editor.service !== null && editor.service.routineError !== "")
@@ -286,14 +279,14 @@ Item {
                 font.pixelSize: Style.font.bodySmall
               }
               Button {
-                text: "Cancel"
+                text: editor.t("Cancel")
                 bordered: true
                 foreground: editor.foreground
                 fontFamily: editor.fontFamily
                 onClicked: editor.requestClose()
               }
               Button {
-                text: "Save"
+                text: editor.t("Save")
                 bordered: true
                 enabled: editor.problem === ""
                 opacity: enabled ? 1 : 0.4
@@ -312,6 +305,13 @@ Item {
             foreground: editor.foreground
             selectedText: editor.accent
             fontFamily: editor.fontFamily
+            message: editor.confirmKind === "delete" ? Model.deleteText(editor.draft, editor.selectedId, editor.t)
+                     : editor.confirmKind === "restore"
+                       ? editor.t("Replace your routine with the original one? You can still cancel before saving.")
+                       : editor.t("Discard your changes to the routine?")
+            cancelText: editor.confirmKind === "discard" ? editor.t("Keep editing") : editor.t("Cancel")
+            confirmText: editor.confirmKind === "delete" ? editor.t("Delete")
+                         : editor.confirmKind === "restore" ? editor.t("Replace") : editor.t("Discard")
             onCanceled: editor.closeConfirm()
             onConfirmed: editor.confirmAction()
           }
