@@ -6,6 +6,8 @@ stop and which exercise to do with your dumbbells, kettlebells or barbell, and
 times the break (10 min by default). If you ignore it, it keeps reminding you
 every 5 minutes until you start, snooze or skip.
 
+![The panel when a break is due](docs/panel.png)
+
 ## What it does
 
 - **Countdown in the bar.** A kettlebell with the minutes left until the next
@@ -30,6 +32,17 @@ It never locks your screen and doesn't log what you did.
 ## Install
 
 ```bash
+omarchy plugin add https://github.com/FerC10110/omarchy-active-break.git --enable
+```
+
+That clones it into `~/.config/omarchy/plugins/io.github.ferc10110.active-break`
+and puts the widget in the bar. To move it, use `omarchy bar move
+io.github.ferc10110.active-break --section right`; to get a newer version,
+`omarchy plugin update io.github.ferc10110.active-break`.
+
+By hand instead:
+
+```bash
 git clone https://github.com/FerC10110/omarchy-active-break.git \
   ~/.config/omarchy/plugins/io.github.ferc10110.active-break
 omarchy plugin enable io.github.ferc10110.active-break
@@ -39,6 +52,8 @@ Nothing else is needed: it uses `omarchy-notification-send` for reminders and
 `pw-play` for the chime.
 
 ## Use
+
+![The widget in the bar](docs/bar-widget.png)
 
 | In the bar | Action |
 | --- | --- |
@@ -92,6 +107,8 @@ o.bind("SUPER + ALT + SHIFT + G", "Active Break: edit routine", "omarchy-shell i
 
 ## Settings
 
+![Settings](docs/settings.png)
+
 The cog in the panel sets:
 
 - the minutes of work, break, reminder interval and snooze
@@ -131,6 +148,8 @@ middle of the screen with three tabs:
   order.
 - **Rotation**: the order of the muscle groups in rotation mode, and which ones
   take part.
+
+![The routine editor](docs/editor.png)
 
 Nothing is written until you click **Save** (or press Ctrl+S). Cancel or Esc
 asks before throwing changes away. **Restore defaults** brings back the
